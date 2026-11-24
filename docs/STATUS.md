@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Fecha: 2026-11-24. Rama `chore/project-foundation`, SHA base `86611a8`. Estado de la fundación multiagente (F0 y F1), consolidado en TASK-005.
+Fecha: 2026-11-24. Rama `chore/project-foundation`, SHA base `86611a8`. TASK-005 consolida F1 y F2 en dos commits sobre esta rama (SHA en el mensaje de entrega y en la Pull Request #1); sin merge a `main`.
 
 - F0: completada. Herramientas locales verificadas por el usuario (Node 24.22.2, pnpm 12.16.1, Git 2.56, gh 2.103.3 autenticado, Codex 0.166.0). Claude Code 2.1.327 verificado con `claude --version` por Orchestrator (TASK-001); 2.1.331 tras el reinicio de TASK-002-RUNTIME. Repositorio privado creado. Entorno de trabajo elegido por el humano: Claude Code Desktop.
 - F1: cerrada por decisión humana explícita DH-G1 (2026-11-24, [TASK-003](reviews/claude/TASK-003.md)). G1 no tiene PASS de Testing ni aprobación de Codex: AUDIT-001 conserva su veredicto FAIL.
@@ -21,7 +21,12 @@ Fecha: 2026-11-24. Rama `chore/project-foundation`, SHA base `86611a8`. Estado d
   - Normalización de saltos de línea de los archivos existentes: pendiente de autorización humana (`.gitattributes` ya define LF).
   - Decisiones pendientes: DH-01..DH-08 y DH-13 (reglas de negocio); DH-09 (cobertura, F2); véase docs/BUSINESS_RULES.md y docs/ROADMAP.md.
   - Decisiones aprobadas por el humano (comunicadas en la sesión de TASK-002-RUNTIME): normalización LF mediante `.gitattributes`; el archivado conserva el historial e impide nuevas asignaciones; las órdenes completadas son estado terminal; se permite cancelar antes de completar, respetando las reglas de negocio; MCP externos restringidos por defecto; no instalar Docker ni dependencias todavía (para F2, el humano autorizó expresamente instalar las dependencias del scaffold: "Comprueba las versiones y compatibilidades antes de instalar las dependencias"; Docker sigue sin autorizar); cobertura centrada en riesgos y reglas críticas; skills especializadas en fases posteriores. Orchestrator no las ha cruzado con los identificadores DH.
-- F2 (Next.js Foundation): autorizada por el humano en DH-G1; el scaffold y su revisión se registran en el commit siguiente.
+- F2 (Next.js Foundation, TASK-004): aprobada por el humano según la revisión de Testing (TASK-005). Testing POST **PASS** ([TASK-004-POST](reviews/claude/TASK-004-POST.md)); contrato y registro en [TASK-004](reviews/claude/TASK-004.md).
+  - Stack: Next.js 16.4.6, React 19.3.1, TypeScript 6.0.3 (7.x incompatible con typescript-eslint), Tailwind 4.3.5, ESLint 9.39.5 (10.x incompatible con plugins de eslint-config-next), Prettier 3.10.1, Vitest 5.1.1, Playwright 1.65.1.
+  - Resultados locales: lint, typecheck, format:check y build en verde; 4 pruebas unitarias y 9 E2E superadas, también en una copia limpia.
+  - ORC4-01 (High) corregido: `next dev` modificaba AGENTS.md; desactivado con `agentRules: false`.
+  - Decisiones humanas (TASK-005): F2P-01 aceptado; F2P-02 se comprueba con la ejecución real de GitHub Actions; F2P-03 aceptado hasta F3; sin auditoría adicional de Codex sobre el scaffold; se mantienen conectores, plugins y reglas de permisos.
+  - CI en GitHub: pendiente de la primera ejecución tras el push de TASK-005 (resultado en la Pull Request #1).
 - F3–F8: pendientes.
 
-No hay todavía aplicación, base de datos ni despliegue.
+No hay funcionalidad de negocio, base de datos ni despliegue. Integración en `main`: pendiente de aprobación humana.
