@@ -40,4 +40,14 @@ Resultado: **F2P-02 cerrado**. La CI real ejecuta los mismos comandos que la ver
 - CI-02: aviso `DEP0040` (módulo `punycode` obsoleto) emitido por una dependencia transitiva durante las pruebas. Sin efecto en los resultados.
 
 ## Pull Request #1
-Título y descripción actualizados para reflejar F1 y F2. Marcada como lista para revisión tras la CI en verde. Sin merge: la integración en `main` requiere aprobación humana.
+Título y descripción actualizados para reflejar F1 y F2. Marcada como lista para revisión tras la CI en verde.
+
+## Commit de registro y su CI
+`f7e75c6` (docs: record CI evidence and consolidation of F1 and F2), push del humano. CI en verde: ejecuciones 45420309003 (14:59:46 → 15:01:00 UTC) y 45420327481 (14:59:52 → 15:01:23 UTC), job `quality` success.
+
+## Integración en `main` y cierre de F2
+- Merge autorizado por el humano (merge commit, sin squash). La regla `deny` impide `gh pr merge` a los agentes: lo ejecutó el humano con `gh pr merge 1 --merge --match-head-commit f7e75c6…`.
+- Verificado en GitHub: PR #1 `MERGED` el 2026-11-24 a las 15:02:15 UTC; merge commit `c4c3bdfbbe8f28dce260f5ad469217197e9b5049`, con padres `ae04f1e` (main) y `f7e75c6` (cabeza de la rama). La rama remota `chore/project-foundation` se conserva en `f7e75c6`.
+- `main` local sincronizada por avance rápido (`git pull --ff-only origin main`; `git merge` está en `deny`): `main` = `origin/main` = `c4c3bdf`, árbol limpio.
+- Rama `feat/supabase-auth` creada desde `main` en `c4c3bdf` para F3.
+- **F2 cerrada.** Este registro se añade en un commit documental sobre `feat/supabase-auth`.
