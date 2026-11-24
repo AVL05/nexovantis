@@ -20,8 +20,12 @@ export function RecordDetails({
   return (
     <dl className="grid gap-4 rounded-lg border border-line bg-surface p-5 sm:grid-cols-2 xl:grid-cols-3">
       <Item term={module.nameLabel}>{record.name}</Item>
-      <Item term="Correo electrónico">{record.email ?? 'No indicado'}</Item>
-      <Item term="Teléfono">{record.phone ?? 'No indicado'}</Item>
+      <Item term="Correo electrónico">
+        <span className="[overflow-wrap:anywhere]">{record.email ?? 'No indicado'}</span>
+      </Item>
+      <Item term="Teléfono">
+        <span className="whitespace-nowrap">{record.phone ?? 'No indicado'}</span>
+      </Item>
       <Item term="Alta">{formatDateTime(record.createdAt)}</Item>
       <Item term="Última modificación">{formatDateTime(record.updatedAt)}</Item>
       {record.archivedAt ? (

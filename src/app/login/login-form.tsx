@@ -33,7 +33,7 @@ export function PasswordField() {
           onClick={() => setVisible((value) => !value)}
           className="absolute inset-y-0 right-0 inline-flex min-w-16 cursor-pointer items-center justify-center rounded-md px-3 text-sm font-medium text-accent hover:text-accent-hover hover:underline"
         >
-          {label}
+          {label} <span className="sr-only">contraseña</span>
         </button>
       </div>
     </div>

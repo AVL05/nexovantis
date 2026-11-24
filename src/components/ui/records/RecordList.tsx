@@ -61,10 +61,10 @@ export function RecordList({
         <Table caption={caption}>
           <thead>
             <tr>
-              <Th>{module.nameLabel}</Th>
-              <Th>Correo electrónico</Th>
-              <Th>Teléfono</Th>
-              <Th>Estado</Th>
+              <Th className="w-[34%] min-w-48">{module.nameLabel}</Th>
+              <Th className="w-[40%]">Correo electrónico</Th>
+              <Th className="w-px whitespace-nowrap">Teléfono</Th>
+              <Th className="w-px whitespace-nowrap">Estado</Th>
             </tr>
           </thead>
           <tbody>
@@ -75,9 +75,13 @@ export function RecordList({
                     {item.name}
                   </Link>
                 </Td>
-                <Td className="break-all">{item.email ?? '—'}</Td>
-                <Td>{item.phone ?? '—'}</Td>
-                <Td>
+                <Td className="max-w-0">
+                  <span className="block truncate" title={item.email ?? undefined}>
+                    {item.email ?? '—'}
+                  </span>
+                </Td>
+                <Td className="whitespace-nowrap">{item.phone ?? '—'}</Td>
+                <Td className="whitespace-nowrap">
                   <StatusBadge archived={item.archivedAt !== null} />
                 </Td>
               </tr>
@@ -98,8 +102,12 @@ export function RecordList({
               </Link>
               <StatusBadge archived={item.archivedAt !== null} />
             </div>
-            <p className="text-sm break-all text-ink-muted">{item.email ?? 'Sin correo'}</p>
-            <p className="text-sm text-ink-muted">{item.phone ?? 'Sin teléfono'}</p>
+            <p className="min-w-0 text-sm [overflow-wrap:anywhere] text-ink-muted">
+              {item.email ?? 'Sin correo'}
+            </p>
+            <p className="text-sm whitespace-nowrap text-ink-muted">
+              {item.phone ?? 'Sin teléfono'}
+            </p>
           </li>
         ))}
       </ul>

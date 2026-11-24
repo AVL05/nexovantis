@@ -39,7 +39,7 @@ Fecha: 2026-11-24. F0, F1 y F2 integradas en `main` con el merge commit `c4c3bdf
   - TASK-008A (design system, estándar): **PASS** (POST y RETEST), sin commit. Dirección "Plano técnico" documentada en [docs/design.md](design.md). Incluye shell responsive, componentes ui y el rediseño de login, dashboard y home; backend de auth sin cambios. Limitaciones: dashboard sin inspección visual con sesión real (abierta) y E2E con Auth real pendiente de CI. Dialog y LiveRegion sin pruebas propias, aceptado provisionalmente por el humano. [Registro](reviews/claude/TASK-008A.md).
   - DH-04, DH-05 y DH-06 **aprobadas** por el humano (2026-11-24) según sus propuestas (docs/BUSINESS_RULES.md); DH-06 requiere adaptar el trigger en una tarea crítica.
   - TASK-008A publicada en `50dd257`; CI 45469916765 en verde (ambos jobs). El humano verificó el login contra Supabase Cloud y el acceso al dashboard.
-  - TASK-008B (CRM y técnicos + correcciones visuales): implementada **sin commit** ([registro](reviews/claude/TASK-008B.md)).
+  - TASK-008B (CRM y técnicos + correcciones visuales): **cerrada en PASS técnico** ([registro](reviews/claude/TASK-008B.md)).
     - Testing PRE: [TASK-008B-PRE](reviews/claude/TASK-008B-PRE.md).
     - RETEST **BLOCKED** solo por los jobs `supabase` de CI pendientes ([TASK-008B-RETEST](reviews/claude/TASK-008B-RETEST.md)). Checks locales en verde: unit 260, integration 219, e2e 12. Sin hallazgos Critical/High/Medium.
     - Migración nueva `20261124100000_task008b_restore_and_activity.sql`:
@@ -49,7 +49,22 @@ Fecha: 2026-11-24. F0, F1 y F2 integradas en `main` con el merge commit `c4c3bdf
       - **No aplicada en Cloud** (requiere autorización).
     - Corregido el oscurecimiento del dashboard: el estado del menú móvil persistía.
     - Cabecera móvil, ancho de escritorio y login revisados en navegador a 375, 393, 768, 1024 y 1440 px.
-    - Ratificado por el humano (2026-11-24): `activity_events` como base de actividad sin cerrar DH-08; restauración por cualquier miembro; rechazo sin identidad autenticada; eventos atómicos; DH-04/DH-05 obligatorias en F4; comodín de búsqueda aceptado provisionalmente. Mejora menor pendiente TASK-008B-M1 (nombre accesible del control de contraseña). Alcance de la inmutabilidad de `activity_events` precisado en el registro. Sigue **BLOCKED** hasta la evidencia de CI.
+    - Ratificado por el humano (2026-11-24): `activity_events` como base de actividad sin cerrar DH-08; restauración por cualquier miembro; rechazo sin identidad autenticada; eventos atómicos; DH-04/DH-05 obligatorias en F4; comodín de búsqueda aceptado provisionalmente. Mejora menor pendiente TASK-008B-M1 (nombre accesible del control de contraseña). Alcance de la inmutabilidad de `activity_events` precisado en el registro. Publicado en `3617d58`; CI 45484066916 en verde (quality y supabase: 28/28 integración Supabase, 54/54 E2E con Auth real). Quinta migración aplicada en Cloud por el humano y verificada por conector. **TASK-008B cerrada en PASS técnico.**
+  - TASK-008C (seed demo): `supabase/seeds/demo-crm.sql` + [docs/SEED.md](SEED.md), sin commit ([registro](reviews/claude/TASK-008C.md)).
+    - Testing POST **PASS** ([TASK-008C-POST](reviews/claude/TASK-008C-POST.md)).
+    - Aplicado en Cloud por Orchestrator con autorización humana, con estos recuentos:
+      - Demo Norte: 24/3 clientes, 6/2 técnicos y 5 eventos `archived`.
+      - Demo Sur: 8/2 clientes, 3/1 técnicos y 3 eventos `archived`.
+    - Actor de los eventos = owner. Aislamiento verificado por RLS con los 3 miembros e idempotencia real comprobada con una segunda ejecución.
+    - H-1 no aceptado por el humano: corregido en TASK-009. TASK-008B-M1 y M2: corregidos en TASK-009.
+  - TASK-009 (integración y cierre de F3, estándar): **PASS local**, sin commit ([registro](reviews/claude/TASK-009.md)).
+    - Testing: POST [PASS](reviews/claude/TASK-009-POST.md), [RETEST PASS](reviews/claude/TASK-009-RETEST.md) (F-1), [RETEST-2 PASS](reviews/claude/TASK-009-RETEST-2.md) (V-1 de la revisión visual).
+    - Seed: solo archiva filas insertadas en la misma ejecución; 3 regresiones nuevas (restaurar y re-ejecutar sin eventos nuevos, registro modificado intacto, idempotencia). No re-ejecutado en Cloud.
+    - M1: "Mostrar/Ocultar contraseña". M2: teléfono en una línea; email truncado solo si no cabe, con `title`.
+    - Local: format, lint, typecheck, build en verde; unit 260, integration 235, e2e 12. Supabase/E2E con Auth real: evidencia CI 45484066916 sobre `3617d58`, no sobre el árbol actual.
+    - Revisión visual (Premium Frontend Director, solo lectura con datos demo) a 375–1440 px: sin desbordes ni errores de consola.
+    - Decisiones humanas: commit autorizado (con TASK-008C); F-2 aceptado como informativo; comprobaciones visuales adicionales, axe, rendimiento y pulido menor diferidos a F7; comportamiento de `pagina` aceptado.
+  - G2: pendiente de commit autorizado, CI verde sobre el nuevo SHA, AUDIT-002 (Codex Astra muy alto) y aprobación humana. Alcance y riesgos en el registro de TASK-009.
 - F4–F8: pendientes.
 
-Funcionalidad de negocio: Clientes y Técnicos (TASK-008B, sin commit). Sin despliegue.
+Funcionalidad de negocio: Clientes y Técnicos (TASK-008B, `3617d58`); datos demo ficticios en Cloud (TASK-008C). Sin despliegue.

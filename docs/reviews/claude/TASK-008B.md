@@ -87,3 +87,19 @@ Mejora menor registrada (no se ha implementado):
   - Un administrador puede saltárselo: desactivando triggers (`ALTER TABLE … DISABLE TRIGGER`, `session_replication_role = replica`), borrando o reemplazando la tabla o los triggers en una migración, o restaurando copias de seguridad.
   - Que la tabla no se manipule desde la administración depende del control de acceso operativo a la base de datos y de la revisión de migraciones, no del esquema.
 - `service_role` no se usa en el código de aplicación (grep en `src/`).
+
+## Cierre técnico (2026-11-24)
+- **Commit y push:** `3617d583920691e76e48e357c555c6b099739ec1` publicado por el humano.
+- **CI** [45484066916](https://github.com/AVL05/nexovantis/actions/runs/45484066916) (push, `feat/supabase-auth`): **success** en ambos jobs.
+  - `quality`: format, lint, typecheck, unit 260/260, integration 219/219 en PGlite, build y e2e 12/12.
+  - `supabase`: migraciones aplicadas sobre un stack local real, `test:supabase` 28/28 (incluye C-31..C-34) y `test:e2e:supabase` 54/54 con Auth real (incluye `crm.spec.ts` y las specs independientes).
+- **Supabase Cloud:** el humano aplicó la quinta migración con la CLI. Orchestrator la verificó con el conector, solo lectura:
+  - `list_migrations` devuelve las 5 versiones, hasta `20261124100000_task008b_restore_and_activity`.
+  - `activity_events` tiene RLS, solo `SELECT` para `authenticated` y una única política SELECT.
+  - Triggers de inmutabilidad (fila y TRUNCATE) y `*_prevent_unarchive` presentes.
+  - `private.prevent_unarchive()` es SECURITY DEFINER con `search_path` vacío y `authenticated` no tiene EXECUTE.
+  - Avisos de seguridad: solo `auth_leaked_password_protection` (WARN, configuración de Auth, fuera del alcance de la tarea).
+  - Avisos de rendimiento: solo `unused_index` de `activity_events_entity_idx` (INFO; la tabla aún está vacía).
+- **Veredicto:** el bloqueo del RETEST era solo la evidencia de CI, que ya existe. **TASK-008B queda cerrada en PASS técnico.**
+  - Siguen abiertas la mejora menor TASK-008B-M1 y la obligación de completar DH-04/DH-05 en F4.
+  - Como sigue sin haber datos en Cloud, archivar y restaurar en Cloud no se ha probado de forma funcional; se cubre con el seed demo (TASK-008C).
