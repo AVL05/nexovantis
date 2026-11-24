@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Fecha: 2026-11-24. Rama `chore/project-foundation`, SHA base `86611a8`. TASK-005 consolida F1 y F2 en dos commits sobre esta rama (SHA en el mensaje de entrega y en la Pull Request #1); sin merge a `main`.
+Fecha: 2026-11-24. Rama `chore/project-foundation`, SHA base `86611a8`. F1 y F2 consolidados en TASK-005 ([registro](reviews/claude/TASK-005.md)): commits `ca2ed3b` y `7bd42c6` en esta rama, Pull Request #1 lista para revisión; sin merge a `main`.
 
 - F0: completada. Herramientas locales verificadas por el usuario (Node 24.22.2, pnpm 12.16.1, Git 2.56, gh 2.103.3 autenticado, Codex 0.166.0). Claude Code 2.1.327 verificado con `claude --version` por Orchestrator (TASK-001); 2.1.331 tras el reinicio de TASK-002-RUNTIME. Repositorio privado creado. Entorno de trabajo elegido por el humano: Claude Code Desktop.
 - F1: cerrada por decisión humana explícita DH-G1 (2026-11-24, [TASK-003](reviews/claude/TASK-003.md)). G1 no tiene PASS de Testing ni aprobación de Codex: AUDIT-001 conserva su veredicto FAIL.
@@ -25,8 +25,9 @@ Fecha: 2026-11-24. Rama `chore/project-foundation`, SHA base `86611a8`. TASK-005
   - Stack: Next.js 16.4.6, React 19.3.1, TypeScript 6.0.3 (7.x incompatible con typescript-eslint), Tailwind 4.3.5, ESLint 9.39.5 (10.x incompatible con plugins de eslint-config-next), Prettier 3.10.1, Vitest 5.1.1, Playwright 1.65.1.
   - Resultados locales: lint, typecheck, format:check y build en verde; 4 pruebas unitarias y 9 E2E superadas, también en una copia limpia.
   - ORC4-01 (High) corregido: `next dev` modificaba AGENTS.md; desactivado con `agentRules: false`.
-  - Decisiones humanas (TASK-005): F2P-01 aceptado; F2P-02 se comprueba con la ejecución real de GitHub Actions; F2P-03 aceptado hasta F3; sin auditoría adicional de Codex sobre el scaffold; se mantienen conectores, plugins y reglas de permisos.
-  - CI en GitHub: pendiente de la primera ejecución tras el push de TASK-005 (resultado en la Pull Request #1).
-- F3–F8: pendientes.
+  - Decisiones humanas (TASK-005): F2P-01 aceptado; F2P-02 cerrado con la ejecución real de GitHub Actions; F2P-03 aceptado hasta F3; sin auditoría adicional de Codex sobre el scaffold; se mantienen conectores, plugins y reglas de permisos.
+  - CI en GitHub sobre `7bd42c6`: ejecuciones 45419339902 (push) y 45419343930 (pull_request) en verde; format, lint, typecheck, 4/4 unitarias, build y 9/9 E2E. Observaciones Informational CI-01 (`pnpm/action-setup@v4` usa Node 20 obsoleto) y CI-02 (aviso `punycode` de una dependencia).
+- F3 (Supabase, autenticación y seguridad de datos): siguiente objetivo, pendiente de inicio.
+- F4–F8: pendientes.
 
 No hay funcionalidad de negocio, base de datos ni despliegue. Integración en `main`: pendiente de aprobación humana.
