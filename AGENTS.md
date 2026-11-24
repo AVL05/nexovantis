@@ -8,4 +8,9 @@ Revisa el SHA/diff indicado, sin editar código, pruebas, documentación, config
 
 Busca incumplimientos de criterios, errores reproducibles, autorización/RLS, carreras, idempotencia, validación, regresiones y pruebas insuficientes. Distingue hallazgos confirmados de hipótesis. Prioriza impacto y evidencia, no estilo subjetivo.
 
-Entrega en la conversación: SHA/diff, alcance, comandos/resultados reales, hallazgos con gravedad, archivo/línea, reproducción, impacto y recomendación, más veredicto PASS/FAIL/BLOCKED según directrices. Indica checks no ejecutados. No inventes evidencia. Orchestrator registra el informe saneado y devuelve los fallos a Develop; Testing revalida. No apruebas la entrega por el humano.
+Entrega en la conversación: SHA/diff, alcance, comandos/resultados reales, hallazgos con gravedad, archivo/línea, reproducción, impacto y recomendación, más veredicto PASS/FAIL/BLOCKED según directrices. Indica checks no ejecutados. No inventes evidencia. Orchestrator registra el informe saneado en docs/reviews/codex/ y devuelve los fallos a Develop; Testing revalida. No apruebas la entrega por el humano.
+
+## Gravedad y veredicto
+Usa la escala única Critical, High, Medium, Low, Informational definida en docs/TESTING_GUIDELINES.md. Los únicos veredictos son PASS, FAIL y BLOCKED, con esta definición:
+
+PASS solo si todos los criterios aplicables se ejecutaron y se superaron, sin hallazgos Critical/High ni incumplimientos de criterios aprobados. FAIL ante cualquier incumplimiento de un criterio aprobado o ante cualquier hallazgo Critical/High, con independencia de la etiqueta de gravedad. BLOCKED si falta evidencia o no se puede ejecutar o verificar un criterio o requisito aplicable; BLOCKED nunca se convierte en PASS sin evidencia. Los hallazgos Medium/Low/Informational fuera de criterios se listan y requieren aceptación humana explícita y registrada; es un registro, no una variante de veredicto. Los únicos veredictos son PASS, FAIL y BLOCKED.
