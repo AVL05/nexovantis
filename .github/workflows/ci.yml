@@ -93,6 +93,19 @@ jobs:
 
       - run: pnpm test:supabase
 
+      # E2E con Auth real: construye la app contra el stack local y ejecuta tests/e2e-supabase.
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e:supabase
+
+      - name: Subir informe de Playwright (Auth real)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-supabase
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Detener Supabase local
         if: always()
         run: supabase stop --no-backup

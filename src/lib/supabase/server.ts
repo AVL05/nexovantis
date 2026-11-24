@@ -22,14 +22,17 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
+        // El segundo argumento (cabeceras anti-cache de la libreria) no se puede aplicar aqui: Next
+        // no permite fijar cabeceras desde `cookies()`. No hace falta: las respuestas que escriben
+        // cookies (Server Actions) y las paginas que leen cookies son dinamicas y privadas. El
+        // refresco de la sesion lo hace `src/proxy.ts`, que si aplica cookies y cabeceras (POST-07).
         setAll(cookiesToSet) {
           try {
             for (const { name, value, options } of cookiesToSet) {
               cookieStore.set(name, value, options);
             }
           } catch {
-            // Un Server Component no puede escribir cookies. El refresco de la sesion lo hara el
-            // proxy de TASK-007; mientras tanto la escritura se ignora de forma segura.
+            // Un Server Component no puede escribir cookies; el proxy ya refresca la sesion.
           }
         },
       },

@@ -93,3 +93,19 @@ Pendiente de aceptación humana: POST-04 (acciones de CI fijadas por versión ma
 - El veredicto se mantiene **BLOCKED** mientras no se ejecuten las pruebas reales de Supabase (F3-03, F3-39, F3-45 y F3-46).
 - Sin más delegaciones ni repetición de pruebas sobre contenido ya validado. El commit solo añade, respecto al árbol revisado en el RETEST, los registros de Orchestrator (`TASK-006.md` y `docs/STATUS.md`).
 - Siguen pendientes de ratificación: la matriz de acceso, una organización por usuario, y DH-04, DH-05 y DH-06.
+
+## Evidencia de CI Supabase (2026-11-24, registro de Orchestrator)
+- Ejecución GitHub Actions 45431037814 (push), SHA `764397c`, rama `feat/supabase-auth`: **success**. `764397c` solo cambia documentación y configuración de agentes respecto a `6bc700d` (código de TASK-006), por lo que la evidencia aplica al código de TASK-006; `6bc700d` no tuvo ejecución propia.
+- Job `supabase`: Supabase CLI 2.122.1, `supabase start` aplicó las 4 migraciones (`…090000` a `…090300`) sin error; `supabase status -o env` devolvió URL y claves (enmascaradas); `pnpm test:supabase` 20/20 (1 archivo); `supabase stop --no-backup` ejecutado.
+- Job `quality`: format, lint, typecheck, unit 44/44, integration 151/151, build y e2e 9/9.
+- Criterios con evidencia de CI: **F3-03** (migraciones aplicadas en Supabase local con `supabase start`), **F3-39** (ejecución real del job) y **F3-45** (Auth, JWT y PostgREST reales). POST-03 (Informational) queda comprobado en lo que cubren esas 20 pruebas y el arranque: nombres de `supabase status -o env`, validez de `config.toml`, correos `@example.test`, RLS y códigos PostgREST.
+- Sigue pendiente de Supabase Cloud: **F3-46** (no autorizado). No se declara PASS.
+- Observaciones Informational: aviso de la CLI `[inbucket]` obsoleto (usar `[local_smtp]` en v3); `pnpm/action-setup@v4` y `supabase/setup-cli@v1` fuerzan Node 20 obsoleto (amplía CI-01).
+- Estado: con F3-46 como único criterio sin evidencia, el cierre de TASK-006 requiere que el humano acepte de forma registrada excluirlo hasta disponer de Cloud. No se repitió Testing: la evidencia es la ejecución literal del job sobre contenido ya revisado.
+
+## Supabase Cloud (2026-11-24, registro de Orchestrator)
+- Proyecto `nexovantis` (ref `sokguksbymvfcuceswdo`, `eu-central-1`, plan Free, 0 $/mes) creado con el conector oficial, con autorización humana. Detalle en [SUPABASE_CLOUD.md](../../SUPABASE_CLOUD.md).
+- Las 4 migraciones se aplicaron en orden con el contenido del repositorio. Las versiones de Cloud son la hora de aplicación, no los timestamps del repositorio (alineación pendiente).
+- Verificación de catálogo de solo lectura: RLS, 21 restricciones, 9 políticas, 7 triggers, GRANT por columna, funciones `private.*` y cuerpo de la 0300 coinciden con lo esperado. Avisos de seguridad y rendimiento: 0.
+- **F3-46**: proyecto aprovisionado y esquema verificado por catálogo. No hay pruebas funcionales con Auth/PostgREST en Cloud (no destructivas, no autorizadas aquí), así que no se declara PASS completo. Ese alcance queda cubierto por F3-45 en CI.
+- Pendiente manual: desactivar el registro público (el conector no lo permite) y crear `.env.local`.

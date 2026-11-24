@@ -30,6 +30,11 @@ site_url = "http://127.0.0.1:3000"
 additional_redirect_urls = ["http://127.0.0.1:3000"]
 jwt_expiry = 3600
 
+# Solo stack local: las E2E con Auth real (TASK-007) hacen ~15 inicios de sesion por worker y el
+# limite por defecto (30 por 5 min y por IP) se agotaria junto con test:supabase.
+[auth.rate_limit]
+sign_in_sign_ups = 300
+
 # Servicios no necesarios para F3 (menos consumo en el runner).
 [studio]
 enabled = false

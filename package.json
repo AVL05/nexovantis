@@ -17,7 +17,8 @@
     "test:unit": "vitest run",
     "test:integration": "vitest run -c vitest.integration.config.mts",
     "test:supabase": "vitest run -c vitest.supabase.config.mts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:supabase": "playwright test -c playwright.supabase.config.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
