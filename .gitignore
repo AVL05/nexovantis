@@ -1,0 +1,29 @@
+# Dependencies and output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+# Test output
+playwright-report/
+test-results/
+blob-report/
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.vercel/
+.claude/settings.local.json
+.claude/agent-memory-local/
+supabase/.temp/
+supabase/.branches/
+# Local logs and editor
+*.log
+.DS_Store
+Thumbs.db
+.vscode/

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "defaultMode": "default",
+    "deny": [
+      "Read(./.env.local)",
+      "Read(./.env.production)",
+      "Read(./.env.test.local)",
+      "Read(./.claude/settings.local.json)"
+    ]
+  }
+}
