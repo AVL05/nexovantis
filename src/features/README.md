@@ -1,3 +1,8 @@
 # features
 
-Dominio por módulo (por ejemplo, órdenes de trabajo o clientes). Cada módulo agrupará sus componentes, validaciones y reglas de dominio. Vacío en F2: aún no hay funcionalidad de negocio. Ver [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
+Dominio por módulo. Cada módulo agrupará sus componentes, validaciones y reglas de dominio. En F3 solo hay esquemas Zod, sin interfaz:
+
+- `customers/schema.ts`: alta y edición de clientes.
+- `technicians/schema.ts`: alta y edición de técnicos.
+
+Ver [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).

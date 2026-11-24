@@ -17,7 +17,7 @@ Fecha: 2026-11-24. F0, F1 y F2 integradas en `main` con el merge commit `c4c3bdf
     - AUD-05: procedimiento adaptado a Desktop en docs/AGENT_WORKFLOW.md y docs/ROADMAP.md.
   - TASK-003 (cierre documental de F1): criterios en [TASK-003-PRE](reviews/claude/TASK-003-PRE.md), reducidos por DH-G1; registro en [TASK-003](reviews/claude/TASK-003.md); POST **PASS** limitado al cierre documental reducido ([TASK-003-POST](reviews/claude/TASK-003-POST.md)), con hallazgos Low/Informational para aceptación humana. Los criterios C01-* y C03-* constan como cancelados por decisión humana.
   - Esfuerzo efectivo de los agentes: no verificable (configurado `high`; override global `effortLevel` conocido, RV-03, sin modificar).
-  - D1 pendiente: Docker, WSL y Supabase CLI no verificados (preflight en F3).
+  - D1 comprobado en F3 (TASK-006): Docker no instalado, WSL 2 sin distribuciones, Supabase CLI no instalado. No se instalan.
   - Normalización de saltos de línea de los archivos existentes: pendiente de autorización humana (`.gitattributes` ya define LF).
   - Decisiones pendientes: DH-01..DH-08 y DH-13 (reglas de negocio); DH-09 (cobertura, F2); véase docs/BUSINESS_RULES.md y docs/ROADMAP.md.
   - Decisiones aprobadas por el humano (comunicadas en la sesión de TASK-002-RUNTIME): normalización LF mediante `.gitattributes`; el archivado conserva el historial e impide nuevas asignaciones; las órdenes completadas son estado terminal; se permite cancelar antes de completar, respetando las reglas de negocio; MCP externos restringidos por defecto; no instalar Docker ni dependencias todavía (para F2, el humano autorizó expresamente instalar las dependencias del scaffold: "Comprueba las versiones y compatibilidades antes de instalar las dependencias"; Docker sigue sin autorizar); cobertura centrada en riesgos y reglas críticas; skills especializadas en fases posteriores. Orchestrator no las ha cruzado con los identificadores DH.
@@ -27,7 +27,13 @@ Fecha: 2026-11-24. F0, F1 y F2 integradas en `main` con el merge commit `c4c3bdf
   - ORC4-01 (High) corregido: `next dev` modificaba AGENTS.md; desactivado con `agentRules: false`.
   - Decisiones humanas (TASK-005): F2P-01 aceptado; F2P-02 cerrado con la ejecución real de GitHub Actions; F2P-03 aceptado hasta F3; sin auditoría adicional de Codex sobre el scaffold; se mantienen conectores, plugins y reglas de permisos.
   - CI en GitHub sobre `7bd42c6`: ejecuciones 45419339902 (push) y 45419343930 (pull_request) en verde; format, lint, typecheck, 4/4 unitarias, build y 9/9 E2E. Observaciones Informational CI-01 (`pnpm/action-setup@v4` usa Node 20 obsoleto) y CI-02 (aviso `punycode` de una dependencia).
-- F3 (Supabase, autenticación y seguridad de datos): siguiente objetivo, en la rama `feat/supabase-auth`. Pendiente de su prompt específico; sin proyecto de Supabase ni dependencias nuevas.
+- F3 (Supabase, autenticación y seguridad de datos), rama `feat/supabase-auth` (commit de TASK-006 autorizado, sin push):
+  - TASK-006 (base de datos): [registro](reviews/claude/TASK-006.md). Testing RETEST **BLOCKED** ([TASK-006-RETEST](reviews/claude/TASK-006-RETEST.md)): todo lo ejecutable en local está en verde (unit 44/44, integration 151/151 en PGlite, e2e 9/9, lint, typecheck, build), sin hallazgos Critical/High/Medium; quedan sin ejecutar la CI con Supabase local (requiere push autorizado) y Supabase Cloud.
+  - Dependencias: @supabase/supabase-js 2.119.2, @supabase/ssr 0.12.7, zod 4.6.7, @electric-sql/pglite 0.5.17 (dev). Supabase CLI 2.122.1 solo en CI.
+  - Esquema: organizations, memberships (owner/member, una organización por usuario), customers, technicians; RLS y privilegios por columna; organizaciones y membresías se crean fuera de la app. Detalle en docs/adr/ADR-001-roles-rls.md.
+  - Entorno local: sin Docker, sin distribución WSL, sin Supabase CLI ni psql; las pruebas de BD usan PGlite (PostgreSQL real con shim de auth, no Supabase) por decisión humana.
+  - Decisiones humanas pendientes: matriz de acceso y una organización por usuario; DH-04, DH-05 y DH-06 (propuestas del humano, no ratificadas; DH-06 bloqueado por trigger); POST-04 y POST-06 aceptados por el humano con sus limitaciones registradas; POST-07 aplazado a TASK-007. Veredicto BLOCKED hasta ejecutar las pruebas reales de Supabase.
+  - TASK-007 (login, logout, sesión, proxy y rutas protegidas): pendiente.
 - F4–F8: pendientes.
 
 No hay funcionalidad de negocio, base de datos ni despliegue.
