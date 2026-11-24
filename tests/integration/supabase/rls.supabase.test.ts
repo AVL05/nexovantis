@@ -324,7 +324,7 @@ describe('operaciones permitidas', () => {
     expect(rename.data).toEqual([{ id: orgA }]);
   });
 
-  it('archivar esta permitido y restaurar queda bloqueado (DH-06 pendiente)', async () => {
+  it('archivar y restaurar estan permitidos a miembros de la organizacion (DH-06)', async () => {
     const created = await ownerA.client
       .from('technicians')
       .insert({ organization_id: orgA, full_name: 'Tecnico para archivar' })
@@ -346,9 +346,10 @@ describe('operaciones permitidas', () => {
       .update({ archived_at: null })
       .eq('id', id)
       .select('id');
-    expect(restore.error).not.toBeNull();
+    expect(restore.error).toBeNull();
+    expect(restore.data).toHaveLength(1);
     const [row] = await adminRows('technicians', 'id', id);
-    expect(row.archived_at).not.toBeNull();
+    expect(row.archived_at).toBeNull();
   });
 });
 

@@ -38,7 +38,18 @@ Fecha: 2026-11-24. F0, F1 y F2 integradas en `main` con el merge commit `c4c3bdf
   - TASK-007 (login, logout, sesión, proxy y rutas protegidas): implementada sin commit ([registro](reviews/claude/TASK-007.md)). Commit `09fb320` publicado; CI 45447327998 en verde (42/42 E2E con Auth real). Testing RETEST **PASS** ([TASK-007-RETEST](reviews/claude/TASK-007-RETEST.md)), con R1 (Medium): validez residual del JWT ante PostgREST hasta su expiración, aceptada por el humano. ORC7-01 resuelto (`disable_signup=true`); `jwt_exp` = 3600 s en Cloud. **TASK-007 cerrada en PASS**, con las limitaciones registradas: E2E con Auth real solo en el stack de CI; en Cloud, comprobaciones no destructivas; R1 para AUDIT-002. Cloud: usuarios y membresías demo creados y verificados con RLS (solo lectura). DH-T7-1: identidad contra Auth; validez residual del JWT ante PostgREST hasta su expiración, registrada.
   - TASK-008A (design system, estándar): **PASS** (POST y RETEST), sin commit. Dirección "Plano técnico" documentada en [docs/design.md](design.md). Incluye shell responsive, componentes ui y el rediseño de login, dashboard y home; backend de auth sin cambios. Limitaciones: dashboard sin inspección visual con sesión real (abierta) y E2E con Auth real pendiente de CI. Dialog y LiveRegion sin pruebas propias, aceptado provisionalmente por el humano. [Registro](reviews/claude/TASK-008A.md).
   - DH-04, DH-05 y DH-06 **aprobadas** por el humano (2026-11-24) según sus propuestas (docs/BUSINESS_RULES.md); DH-06 requiere adaptar el trigger en una tarea crítica.
-  - TASK-008 (CRM y equipo: clientes y técnicos, con alta, consulta, edición, búsqueda y archivado): preparada, sin iniciar. Identidad visual fijada en TASK-008A. Clasificación prevista: estándar (CRUD sobre RLS ya verificada), con PRE si el archivado introduce invariantes nuevas. DH-04 y DH-05 (archivar con órdenes abiertas, efectivas cuando existan órdenes en F4) y DH-06 (restaurar; requiere adaptar el trigger con PRE) están aprobadas.
+  - TASK-008A publicada en `50dd257`; CI 45469916765 en verde (ambos jobs). El humano verificó el login contra Supabase Cloud y el acceso al dashboard.
+  - TASK-008B (CRM y técnicos + correcciones visuales): implementada **sin commit** ([registro](reviews/claude/TASK-008B.md)).
+    - Testing PRE: [TASK-008B-PRE](reviews/claude/TASK-008B-PRE.md).
+    - RETEST **BLOCKED** solo por los jobs `supabase` de CI pendientes ([TASK-008B-RETEST](reviews/claude/TASK-008B-RETEST.md)). Checks locales en verde: unit 260, integration 219, e2e 12. Sin hallazgos Critical/High/Medium.
+    - Migración nueva `20261124100000_task008b_restore_and_activity.sql`:
+      - Restauración permitida con evento en `activity_events`.
+      - Trigger SECURITY DEFINER.
+      - Actor obligatorio.
+      - **No aplicada en Cloud** (requiere autorización).
+    - Corregido el oscurecimiento del dashboard: el estado del menú móvil persistía.
+    - Cabecera móvil, ancho de escritorio y login revisados en navegador a 375, 393, 768, 1024 y 1440 px.
+    - Ratificado por el humano (2026-11-24): `activity_events` como base de actividad sin cerrar DH-08; restauración por cualquier miembro; rechazo sin identidad autenticada; eventos atómicos; DH-04/DH-05 obligatorias en F4; comodín de búsqueda aceptado provisionalmente. Mejora menor pendiente TASK-008B-M1 (nombre accesible del control de contraseña). Alcance de la inmutabilidad de `activity_events` precisado en el registro. Sigue **BLOCKED** hasta la evidencia de CI.
 - F4–F8: pendientes.
 
-No hay funcionalidad de negocio, base de datos ni despliegue.
+Funcionalidad de negocio: Clientes y Técnicos (TASK-008B, sin commit). Sin despliegue.

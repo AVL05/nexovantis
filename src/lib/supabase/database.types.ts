@@ -146,6 +146,45 @@ export type Database = {
           },
         ];
       };
+      activity_events: {
+        Row: {
+          id: string;
+          organization_id: string;
+          actor_id: string;
+          entity_type: 'customer' | 'technician';
+          entity_id: string;
+          action: 'archived' | 'restored';
+          occurred_at: string;
+        };
+        // Solo lectura para usuarios (sin GRANT de escritura): los eventos los escribe el trigger.
+        Insert: {
+          id?: string;
+          organization_id: string;
+          actor_id: string;
+          entity_type: 'customer' | 'technician';
+          entity_id: string;
+          action: 'archived' | 'restored';
+          occurred_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          actor_id?: string;
+          entity_type?: 'customer' | 'technician';
+          entity_id?: string;
+          action?: 'archived' | 'restored';
+          occurred_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'activity_events_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };

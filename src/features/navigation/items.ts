@@ -13,7 +13,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'dashboard', label: 'Panel', icon: 'home', href: '/dashboard' },
-  { key: 'customers', label: 'Clientes', icon: 'users', href: null },
-  { key: 'technicians', label: 'Técnicos', icon: 'wrench', href: null },
+  { key: 'customers', label: 'Clientes', icon: 'users', href: '/customers' },
+  { key: 'technicians', label: 'Técnicos', icon: 'wrench', href: '/technicians' },
   { key: 'orders', label: 'Órdenes', icon: 'clipboard', href: null },
 ];

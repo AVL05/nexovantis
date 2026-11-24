@@ -921,7 +921,7 @@ describe('F3 escalada de privilegios y membresias', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-describe('F3 archivado permitido y restauracion bloqueada (DH-06 no ratificada)', () => {
+describe('F3 archivado y restauracion permitidos (DH-06 aprobada, TASK-008B)', () => {
   useFreshDb();
 
   const archivedAt = async (table: TenantTable, id: string) =>
@@ -959,19 +959,39 @@ describe('F3 archivado permitido y restauracion bloqueada (DH-06 no ratificada)'
     },
   );
 
+  // TASK-008B: antes F3-31 comprobaba que restaurar se rechazaba (DH-06 pendiente). DH-06 esta
+  // aprobada: la restauracion es valida y deja un evento (ver archive-restore.test.ts). La
+  // preparacion archiva como usuario porque un archivado sin auth.uid() ya no se admite.
   it.each(TENANT_TABLES.flatMap((t) => ACTORS_A.map((actor) => ({ ...t, actor }))))(
-    'F3-31: $actor no restaura (archived_at a null) en $table',
+    'F3-31: $actor restaura (archived_at a null) en $table de su organizacion',
     async ({ table, actor }) => {
       const id = tableKey(table, 'A');
-      await su(`update public.${table} set archived_at = now() where id = $1`, [id]);
-      const before = await archivedAt(table, id);
-      expect(before).toBeInstanceOf(Date);
+      await userTry(s.ownerA, `update public.${table} set archived_at = now() where id = $1`, [id]);
+      expect(await archivedAt(table, id)).toBeInstanceOf(Date);
       const o = await userTry(
         s[actor],
         `update public.${table} set archived_at = null where id = $1 returning id`,
         [id],
       );
-      expectRejected(o);
+      expect(o.code).toBeUndefined();
+      expect(o.rows).toHaveLength(1);
+      expect(await archivedAt(table, id)).toBeNull();
+    },
+  );
+
+  it.each(TENANT_TABLES)(
+    'F3-31: no se restaura una fila archivada de otra organizacion en $table',
+    async ({ table }) => {
+      const id = tableKey(table, 'B');
+      await userTry(s.ownerB, `update public.${table} set archived_at = now() where id = $1`, [id]);
+      const before = await archivedAt(table, id);
+      expect(before).toBeInstanceOf(Date);
+      const o = await userTry(
+        s.ownerA,
+        `update public.${table} set archived_at = null where id = $1 returning id`,
+        [id],
+      );
+      expectNoRows(o);
       expect(await archivedAt(table, id)).toEqual(before);
     },
   );

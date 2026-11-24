@@ -92,6 +92,9 @@ Solo transiciones funcionales de 150-200 ms (`ease-out`): color de hover y desli
 - **Dialog:** confirmaciones y formularios breves; título obligatorio; Escape y foco gestionados por `<dialog>`.
 - **EmptyState / Alert / ErrorState:** vacío = qué llegará; alerta = mensaje contextual; error = qué pasó y cómo reintentar. `danger` anuncia con `role="alert"`.
 - **LiveRegion:** aviso breve anunciado a lectores de pantalla; sin cola ni temporizadores.
+- **PageHeader / LinkButton:** un único `h1` por página con descripción y acciones; `LinkButton` es un enlace con el aspecto de `Button` (misma altura táctil de 40 px), para navegación (alta, cancelar).
+- **SearchBar / SegmentedLinks / Pagination:** búsqueda por `GET`, filtro de una opción y paginación por enlaces; todo viaja en `searchParams` (URL compartible, funciona sin JavaScript). Resumen "Página X de Y".
+- **RecordList / RecordForm / ArchiveControl / HistoryList (`ui/records`):** listado (tabla desde 768 px, tarjetas en móvil, estados vacíos con CTA), formulario con validación HTML y errores por campo, archivar/restaurar con `Dialog` (`danger` solo para archivar) y éxito anunciado en `LiveRegion`, e historial de archivado sin actores inventados. Los usan Clientes y Técnicos.
 - **AppShell:** marco de toda página autenticada; la navegación se edita solo en `src/features/navigation/items.ts`. `data-testid` `org-name`/`user-role` los emite únicamente el shell.
 
 ## 5. Accesibilidad y responsive
@@ -101,3 +104,10 @@ Landmarks `header`, `nav` (etiquetada), `main`; un `h1` por página; enlace "Sal
 ## 6. Verificación
 
 Revisión estática y comprobaciones automáticas del repositorio (tipos, lint, unit, build, E2E de humo). La inspección visual en navegador a 375/768/1280 px y la auditoría de accesibilidad con herramienta quedan pendientes de Testing/humano si no constan en el informe de tarea. No se declara conformidad WCAG.
+
+## Ajustes TASK-008B-DEV2
+
+- Panel móvil: se cierra al cambiar de ruta, al pulsar cualquier enlace (también la ruta actual), con Escape, con la capa, con su botón "Cerrar panel" y al cruzar a 768 px. Abierto: resto del contenido `inert` y body sin scroll; en escritorio no hay capa ni bloqueo.
+- Cabecera móvil: botón de menú icónico (40 px, nombre accesible "Menú"), monograma, y a la derecha organización/rol truncados más "Cerrar sesión".
+- Contenedor de `main`: ancho máximo 1400 px; formularios ≤ 42rem; detalle en 3 columnas desde 1280 px.
+- Login: panel de marca con retícula de plano técnico (SVG inline decorativo), cabecera de marca en móvil y control "Mostrar/Ocultar" de contraseña (texto visible, sin la palabra "contraseña" para no duplicar el label del campo).

@@ -52,17 +52,24 @@ describe('AppShell', () => {
     expect(container.querySelector('[data-testid="user-role"]')).toBeNull();
   });
 
-  it('navegacion: Panel con aria-current; otros sin enlace', () => {
+  it('navegacion: Panel, Clientes y Tecnicos enlazados (TASK-008B); Ordenes sin enlace; aria-current en la actual', () => {
     shell();
     const nav = screen.getByRole('navigation');
     const links = within(nav).getAllByRole('link');
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute('href', '/dashboard');
+    expect(links.map((l) => l.getAttribute('href'))).toEqual([
+      '/dashboard',
+      '/customers',
+      '/technicians',
+    ]);
     expect(links[0]).toHaveAttribute('aria-current', 'page');
-    for (const label of ['Clientes', 'Técnicos', 'Órdenes']) {
-      expect(within(nav).getByText(label).closest('a')).toBeNull();
-    }
-    expect(NAV_ITEMS.filter((i) => i.href).map((i) => i.href)).toEqual(['/dashboard']);
+    expect(links[1]).not.toHaveAttribute('aria-current');
+    expect(links[2]).not.toHaveAttribute('aria-current');
+    expect(within(nav).getByText('Órdenes').closest('a')).toBeNull();
+    expect(NAV_ITEMS.filter((i) => i.href).map((i) => i.href)).toEqual([
+      '/dashboard',
+      '/customers',
+      '/technicians',
+    ]);
   });
 
   it('menu movil: aria-expanded/aria-controls, Escape cierra y devuelve foco', () => {

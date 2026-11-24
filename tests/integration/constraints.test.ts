@@ -116,8 +116,10 @@ describe('triggers', () => {
     expect(code).toBe('42501');
   });
 
-  it('restaurar un archivado falla incluso con privilegios de administracion (DH-06)', async () => {
-    await su('update public.customers set archived_at = now() where id = $1', [s.customerB]);
+  it('restaurar sin actor (privilegios de administracion sin JWT) falla y conserva el archivado (DH-06)', async () => {
+    await db.asUser(s.ownerB, (tx) =>
+      tx.query('update public.customers set archived_at = now() where id = $1', [s.customerB]),
+    );
     const code = await sqlState(() =>
       su('update public.customers set archived_at = null where id = $1', [s.customerB]),
     );
@@ -127,9 +129,13 @@ describe('triggers', () => {
   });
 
   it('un registro archivado conserva su archived_at: no se reescribe (POST-05)', async () => {
-    await su(`update public.technicians set archived_at = '2026-01-01T00:00:00Z' where id = $1`, [
+    await db.asUser(s.ownerB, (tx) =>
+      tx.query(`update public.technicians set archived_at = now() where id = $1`, [s.technicianB]),
+    );
+    const before = await su('select archived_at from public.technicians where id = $1', [
       s.technicianB,
     ]);
+    const archivedAt = (before.rows[0].archived_at as Date).toISOString();
     const attempts = [
       () =>
         db.asUser(s.memberB, (tx) =>
@@ -139,11 +145,13 @@ describe('triggers', () => {
         ),
       () =>
         db.asUser(s.ownerB, (tx) =>
-          tx.query(`update public.technicians set archived_at = null where id = $1`, [
-            s.technicianB,
-          ]),
+          tx.query(
+            `update public.technicians set archived_at = '2026-01-01T00:00:00Z' where id = $1`,
+            [s.technicianB],
+          ),
         ),
       () => su(`update public.technicians set archived_at = now() where id = $1`, [s.technicianB]),
+      () => su(`update public.technicians set archived_at = null where id = $1`, [s.technicianB]),
     ];
     for (const attempt of attempts) {
       expect(await sqlState(attempt)).toBe('23000');
@@ -151,7 +159,7 @@ describe('triggers', () => {
     const row = await su('select archived_at from public.technicians where id = $1', [
       s.technicianB,
     ]);
-    expect((row.rows[0].archived_at as Date).toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect((row.rows[0].archived_at as Date).toISOString()).toBe(archivedAt);
     // Otras ediciones de un registro archivado siguen permitidas (mismo archived_at).
     const edited = await db.asUser(s.memberB, (tx) =>
       tx.query(`update public.technicians set notes = 'nota' where id = $1 returning id`, [

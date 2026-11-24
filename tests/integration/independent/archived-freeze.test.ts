@@ -46,21 +46,28 @@ const cases: { table: Table; id: () => string }[] = [
   { table: 'technicians', id: () => s.technicianA },
 ];
 
-describe.each(cases)('POST-05: archived_at congelado en $table', ({ table, id }) => {
+describe.each(cases)('POST-05 / DH-06: archived_at en $table', ({ table, id }) => {
   const FIXED = '2026-01-01T00:00:00Z';
 
-  it('archivar (nulo a fecha) sigue permitido para member', async () => {
+  it('archivar (nulo a fecha) sigue permitido para member; la fecha la fija el servidor, no el cliente', async () => {
+    // TASK-008B: antes se conservaba la fecha enviada (FIXED); ahora el servidor la sustituye por now().
     const res = await asUser(
       s.memberA,
-      `update public.${table} set archived_at = $2 where id = $1 returning id`,
+      `update public.${table} set archived_at = $2 where id = $1
+       returning archived_at = now() as forced`,
       [id(), FIXED],
     );
-    expect(res.rows).toHaveLength(1);
-    expect((await archivedAt(table, id()))?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect(res.rows).toEqual([{ forced: true }]);
+    const stored = await archivedAt(table, id());
+    expect(stored?.toISOString()).not.toBe('2026-01-01T00:00:00.000Z');
+    expect(Math.abs(Date.now() - (stored as Date).getTime())).toBeLessThan(5 * 60_000);
   });
 
-  it('reescribir con otra fecha (pasada, actual, futura) o con nulo falla con 23000 para member, owner y superusuario', async () => {
-    const values = ['now()', `now() + interval '1 year'`, `'1999-01-01T00:00:00Z'`, 'null'];
+  it('reescribir con otra fecha (pasada, actual, futura) falla con 23000 para member, owner y superusuario', async () => {
+    // TASK-008B: se retira el valor "null" de esta lista: restaurar ya esta permitido (DH-06) y se
+    // prueba en el siguiente caso. Las fechas distintas siguen rechazadas.
+    const before = await archivedAt(table, id());
+    const values = ['now()', `now() + interval '1 year'`, `'1999-01-01T00:00:00Z'`];
     for (const value of values) {
       for (const actor of [s.memberA, s.ownerA, 'su'] as const) {
         const sql = `update public.${table} set archived_at = ${value} where id = $1`;
@@ -68,14 +75,14 @@ describe.each(cases)('POST-05: archived_at congelado en $table', ({ table, id })
         expect(await code(run), `${table} ${actor} -> ${value}`).toBe('23000');
       }
     }
-    expect((await archivedAt(table, id()))?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect(await archivedAt(table, id())).toEqual(before);
   });
 
   it('actualizar con el mismo archived_at y editar otros campos sigue permitido', async () => {
     const same = await asUser(
       s.ownerA,
-      `update public.${table} set archived_at = $2 where id = $1 returning id`,
-      [id(), FIXED],
+      `update public.${table} set archived_at = archived_at where id = $1 returning id`,
+      [id()],
     );
     expect(same.rows).toHaveLength(1);
     const other = await su(
@@ -83,6 +90,40 @@ describe.each(cases)('POST-05: archived_at congelado en $table', ({ table, id })
       [id()],
     );
     expect(other[0].notes).toBe('editada');
+  });
+
+  it('restaurar (fecha a nulo) esta permitido para owner y member y deja la fila activa (DH-06)', async () => {
+    // TASK-008B: antes "null" se rechazaba con 23000 para todos, incluido el superusuario.
+    expect(await archivedAt(table, id())).toBeInstanceOf(Date);
+    const res = await asUser(
+      s.ownerA,
+      `update public.${table} set archived_at = null where id = $1 returning id`,
+      [id()],
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(await archivedAt(table, id())).toBeNull();
+    // Se puede volver a archivar y el miembro tambien puede restaurar.
+    await asUser(s.ownerA, `update public.${table} set archived_at = now() where id = $1`, [id()]);
+    const again = await asUser(
+      s.memberA,
+      `update public.${table} set archived_at = null where id = $1 returning id`,
+      [id()],
+    );
+    expect(again.rows).toHaveLength(1);
+    expect(await archivedAt(table, id())).toBeNull();
+  });
+
+  it('el superusuario sin actor (sin auth.uid()) no restaura ni archiva (23000)', async () => {
+    await asUser(s.ownerA, `update public.${table} set archived_at = now() where id = $1`, [id()]);
+    expect(
+      await code(() => su(`update public.${table} set archived_at = null where id = $1`, [id()])),
+    ).toBe('23000');
+    expect(await archivedAt(table, id())).toBeInstanceOf(Date);
+    await asUser(s.ownerA, `update public.${table} set archived_at = null where id = $1`, [id()]);
+    expect(
+      await code(() => su(`update public.${table} set archived_at = now() where id = $1`, [id()])),
+    ).toBe('23000');
+    expect(await archivedAt(table, id())).toBeNull();
   });
 
   it('una fila no archivada de la otra organizacion no se ve afectada por el trigger', async () => {
@@ -98,8 +139,20 @@ describe.each(cases)('POST-05: archived_at congelado en $table', ({ table, id })
   });
 });
 
-describe('POST-05: la funcion sigue sin ser ejecutable', () => {
-  it('private.prevent_unarchive() no es ejecutable por authenticated (42501)', async () => {
-    expect(await code(() => asUser(s.ownerA, 'select private.prevent_unarchive()'))).toBe('42501');
+describe('POST-05: las funciones de trigger de archived_at siguen sin ser ejecutables', () => {
+  it('ninguna funcion de trigger de customers/technicians es ejecutable por authenticated ni anon (42501)', async () => {
+    // TASK-008B: antes se nombraba private.prevent_unarchive(); se generaliza por si la
+    // funcion cambia de nombre al implementar DH-06.
+    const fns = await su(
+      `select distinct t.tgfoid::regprocedure::text as sig from pg_trigger t
+       where t.tgrelid in ('public.customers'::regclass, 'public.technicians'::regclass)
+         and not t.tgisinternal`,
+    );
+    expect(fns.length).toBeGreaterThanOrEqual(3);
+    for (const { sig } of fns) {
+      expect(await code(() => asUser(s.ownerA, `select ${sig as string}`)), sig as string).toBe(
+        '42501',
+      );
+    }
   });
 });

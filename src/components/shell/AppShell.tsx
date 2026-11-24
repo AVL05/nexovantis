@@ -30,18 +30,20 @@ export function AppShell({
       {organizationName ? (
         <span
           data-testid="org-name"
-          className="max-w-40 truncate text-sm font-semibold sm:max-w-64"
+          className="block max-w-full truncate text-sm font-semibold sm:max-w-64"
         >
           {organizationName}
         </span>
       ) : null}
       {roleLabel ? (
-        <span data-testid="user-role" className="text-xs text-ink-muted">
+        <span data-testid="user-role" className="block max-w-full truncate text-xs text-ink-muted">
           {roleLabel}
         </span>
       ) : null}
       {userEmail && !organizationName ? (
-        <span className="max-w-40 truncate text-xs text-ink-muted sm:max-w-64">{userEmail}</span>
+        <span className="block max-w-full truncate text-xs text-ink-muted sm:max-w-64">
+          {userEmail}
+        </span>
       ) : null}
     </div>
   );

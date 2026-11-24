@@ -18,6 +18,20 @@ const SIZE: Record<ButtonSize, string> = {
   lg: 'h-12 px-5 text-base',
 };
 
+/** Clases de un botón; las reutiliza LinkButton para enlaces con aspecto de botón. */
+export function buttonClass(
+  variant: ButtonVariant = 'primary',
+  size: ButtonSize = 'md',
+  className?: string,
+): string {
+  return cn(
+    'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[background-color,border-color,color] duration-150 disabled:cursor-not-allowed disabled:opacity-55',
+    VARIANT[variant],
+    SIZE[size],
+    className,
+  );
+}
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -40,12 +54,7 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(
-        'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-[background-color,border-color,color] duration-150 disabled:cursor-not-allowed disabled:opacity-55',
-        VARIANT[variant],
-        SIZE[size],
-        className,
-      )}
+      className={buttonClass(variant, size, className)}
       {...rest}
     >
       {loading ? <Spinner size="sm" /> : null}
