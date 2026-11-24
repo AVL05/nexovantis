@@ -37,3 +37,25 @@ Organizaciones demo `Demo Norte` y `Demo Sur` creadas. Las membresías quedan pe
   - **Validez residual ante PostgREST**: un access token (JWT) copiado antes del logout puede seguir aceptándose en llamadas directas a la API de datos hasta su expiración (`jwt_expiry` = 3600 s). No se ha demostrado lo contrario y no se afirma una revocación inmediata. No se añaden mecanismos de revocación sin una necesidad demostrada.
 - TASK-007 sigue en **BLOCKED** hasta verificar las E2E con Auth real en CI.
 - Usuarios demo: el humano informó de que los había creado, pero `auth.users` del proyecto `nexovantis` tiene 0 filas (consulta de lectura). Las membresías quedan pendientes. `sin.org@example.com` se mantendrá sin membresía.
+
+## CI con Auth real y RETEST (2026-11-24)
+- Push de `09fb320` realizado por el humano. GitHub Actions 45447327998: **success**.
+  - Job `supabase`: 4 migraciones aplicadas con `[auth.rate_limit]` (F7-01 resuelto). `test:supabase` 20/20. Las E2E con Auth real superaron 42/42, con 1 worker y sin skipped, flaky ni retry.
+  - Job `quality`: unit 164/164, integration 151/151, e2e 9/9.
+- Testing RETEST: **PASS** ([TASK-007-RETEST](TASK-007-RETEST.md)). T7-09 demuestra que, tras el logout, Nexovantis borra las cookies y rechaza una cookie copiada antes del logout. No demuestra nada sobre el uso directo del access token contra PostgREST: R1 (Medium) queda como no demostrado, pendiente de aceptación humana (DH-T7-1).
+
+## Verificación no destructiva en Cloud (registro de Orchestrator)
+- Membresías demo insertadas: `owner.norte` (owner) y `member.norte` (member) en Demo Norte, `owner.sur` (owner) en Demo Sur; `sin.org` sin membresía. Los 4 usuarios están confirmados.
+- RLS simulando cada usuario (`role authenticated` y claims, en transacción de solo lectura): `member.norte` ve solo Demo Norte y 2 membresías; `owner.sur` ve solo Demo Sur y 1 membresía; `sin.org` ve 0 organizaciones y 0 membresías.
+- API con la clave publicable y sin sesión: las 4 tablas devuelven 401/42501; `rpc/is_org_member` da 404 (esquema `private` no expuesto). Un login con credenciales inválidas devuelve el error genérico `invalid_credentials`.
+- **Hallazgo ORC7-01 (Medium)**: `GET /auth/v1/settings` devuelve `disable_signup=false`, así que el registro público sigue activo en Cloud aunque el humano informó de que lo había desactivado. No se probó un alta para no crear datos. La app no ofrece registro, pero la API de Auth lo admitiría. Acción manual: desactivarlo en el panel y volver a comprobar la configuración.
+- No se probó un login real con los usuarios demo, porque las contraseñas son del humano y no se comparten.
+- Decisión humana (2026-11-24): **R1 aceptado**. Un access token copiado antes del logout puede seguir aceptándose ante PostgREST hasta su expiración (`jwt_expiry` = 3600 s). Riesgo residual registrado; no se añaden mecanismos de revocación.
+
+## Cierre (2026-11-24)
+- ORC7-01 resuelto: `GET /auth/v1/settings` en Cloud devuelve `disable_signup=true`.
+- Expiración del access token en Cloud: `app.settings.jwt_exp` = 3600 s (consulta de lectura, sin modificar); coincide con `jwt_expiry` = 3600 del stack local de CI. Es el límite de R1.
+- El humano acepta el resto de resultados del RETEST. **TASK-007 cerrada en PASS**. Limitaciones reales:
+  - Las E2E con Auth real se ejecutaron contra el stack local de CI, no contra Cloud.
+  - En Cloud solo se hicieron comprobaciones no destructivas (RLS simulando cada usuario, API sin sesión, configuración de Auth), sin login real con los usuarios demo.
+  - R1 aceptado como riesgo residual, para revisión en AUDIT-002 (Codex).
