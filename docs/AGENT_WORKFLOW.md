@@ -1,56 +1,13 @@
 # Flujo multiagente
 
 ## Modelos objetivo
-Orchestrator: Claude Opus 5.5 high; Extra en bloqueos complejos. Develop y Testing: Sonnet 5.5 high; escalar a Opus cuando proceda con permiso. Codex: GPT-6.2 Sol alto para hitos; Astra muy alto en seguridad, concurrencia y auditoría final. Los alias opus/sonnet se resuelven según disponibilidad: comprobar en los selectores de Claude Code Desktop (la terminal es un complemento opcional) y registrar valores efectivos solo cuando sean visibles. No añadir agentes inicialmente ni activar consumo de pago.
+Orchestrator: Claude Opus 5.5 medium en tareas estándar, high en críticas; Extra solo en bloqueos complejos justificados. Develop y Testing: Sonnet 5.5 medium por defecto; high en críticas mediante parámetro de invocación si está disponible, y escalar a Opus solo con permiso. Codex: GPT-6.2 Sol alto para hitos; Astra muy alto en seguridad, concurrencia y auditoría final. Los alias opus/sonnet se resuelven según disponibilidad: comprobar en los selectores de Claude Code Desktop (la terminal es un complemento opcional) y registrar valores efectivos solo cuando sean visibles. No añadir agentes inicialmente ni activar consumo de pago.
 
 ## Arranque
-Desde la raíz, iniciar Claude Code Desktop, elegir modelo y esfuerzo en sus selectores (`/model` y `/effort` son comandos de la CLI: complementarios y opcionales) y aplicar la sección "Comprobación de agentes, modelos, esfuerzos y permisos". Comprobar las variables de esfuerzo de esa sección; el `effortLevel` global (RV-03) es un factor conocido y no se modifica. Revisar permisos; no usar --dangerously-skip-permissions. Los límites de archivos de los agentes son contractuales, no un sandbox; inspeccionar cada diff. Referencia: https://code.claude.com/docs/en/sub-agents
+Desde la raíz, iniciar Claude Code Desktop, elegir modelo y esfuerzo en sus selectores (`/model` y `/effort` son comandos de la CLI: complementarios y opcionales) y aplicar la sección "Comprobación de agentes, modelos, esfuerzos y permisos". No modificar configuración global. Comprobar overrides de esfuerzo solo si hay una discrepancia material. Revisar permisos; no usar --dangerously-skip-permissions. Los límites de archivos de los agentes son contractuales, no un sandbox; inspeccionar cada diff. Referencia: https://code.claude.com/docs/en/sub-agents
 
 ## Comprobación de agentes, modelos, esfuerzos y permisos
-En Claude Code 2.1.327 el asistente interactivo de agentes (el comando `agents` precedido de barra) solo muestra un aviso y ya no sirve para verificar. La verificación vigente es la siguiente. "Humano" significa sesión interactiva o terminal del usuario; Orchestrator solo puede ejecutar comandos no interactivos.
-
-La sesión elegida es Claude Code Desktop. Las filas siguientes son las comprobaciones originales de la CLI y se conservan como complementarias y opcionales: varias no están documentadas en Desktop y ninguna es prerrequisito de G1 (DH-G1; véase "Gate G1"). La tabla de trazabilidad posterior da el equivalente en Desktop de cada una.
-
-| Comprobación | Quién | Qué verifica |
-|---|---|---|
-| `claude --version` | Humano u Orchestrator (no interactivo) | Versión instalada (2.1.327 verificada) |
-| `/status` | Humano (solo terminal; complementaria, no documentada en Desktop) | Modelo y "Setting sources" (debe incluir `.claude/settings.json`) |
-| `/permissions` | Humano (solo terminal; complementaria, no documentada en Desktop) | Reglas deny, ask y allow vigentes y su origen (proyecto) |
-| `/mcp` | Humano (solo terminal; complementaria, no documentada en Desktop) | Servidores y conectores activos; sus interruptores se guardan en `~/.claude.json` (global, ningún agente lo toca) |
-| `/context` | Humano (opcional; en Desktop, tarjeta Context) | Si el contexto incluye definiciones o instrucciones MCP |
-| `claude doctor` | Humano, en terminal (solo terminal; complementaria) | Problemas de configuración y entradas rechazadas |
-| `/tasks` (desde 2.1.242) | Humano (solo terminal; complementaria, no documentada en Desktop) | Fila del subagente con su modelo y esfuerzo |
-| `claude --debug` (desde 2.1.296) | Humano, en terminal (solo terminal; complementaria) | Campos no reconocidos de los agentes ("does not recognize or apply") |
-| Prueba de una regla `ask` (p. ej. `git add -n <archivo>`), en la sesión principal y en una delegación | Humano (cancelada por DH-G1; sin ejecutar) | Que aparece el diálogo de confirmación. Orchestrator no puede observar esos diálogos y Testing no observó ninguno desde su subagente (registros: docs/reviews/claude/TASK-002.md, ORC-07, y TASK-002-POST.md, POST-03) |
-
-Trazabilidad: cada comprobación original y su equivalente en Desktop (fuente: docs/reviews/claude/TASK-002-RUNTIME.md, sin documentación nueva).
-
-| Comprobación original | Equivalente en Desktop | Estado |
-|---|---|---|
-| `claude --version` | `claude --version` (no interactivo) | Verificable directamente (2.1.331 en RUNTIME) |
-| `/status` (modelo y Setting sources) | Modelo: selector de modelo. Setting sources: sin visor equivalente | Modelo: observación humana. Setting sources: no verificable en Desktop |
-| `/permissions` (reglas y origen) | Modo de permisos: selector de modo (`Ctrl+Shift+M`). Reglas efectivas: sin visor equivalente | Modo: observación humana. Reglas: no verificable en Desktop; mitigado con hashes de configuración, pruebas inocuas observadas y revisión humana de `.claude/settings.local.json` |
-| `/mcp` (conectores) | Menú `+` del compositor > Connectors y Customize > Connectors | Observación humana; `/mcp` no está documentado en Desktop |
-| `/context` | Tarjeta Context del panel de detalles (o `/context`, opcional) | Observación humana |
-| `claude doctor` | Terminal del humano; complementario | Diagnóstico de la CLI, no de la sesión de Desktop; no verificable en Desktop |
-| `/tasks` (modelo y esfuerzo del subagente) | Selectores de modelo y esfuerzo, y panel Background tasks | Valor configurado; el esfuerzo efectivo sigue no verificable en Desktop |
-| `claude --debug` | Terminal del humano; complementario | No verificable en Desktop |
-| Prueba de `ask` | Prueba humana en la sesión principal y en una delegación | Cancelada por DH-G1; sin ejecutar, no verificable |
-| Carga de los agentes | Delegaciones reales a Testing y a Develop | Verificable por los informes de las delegaciones |
-
-Variables de entorno que alteran el esfuerzo: `CLAUDE_CODE_EFFORT_LEVEL` y `CLAUDE_CODE_SUBAGENT_EFFORT`. Comprobación sin imprimir otras variables:
-- Git Bash: `printenv | grep -E '^CLAUDE_CODE_(EFFORT_LEVEL|SUBAGENT_EFFORT)='`
-- PowerShell: `Get-ChildItem Env: | Where-Object Name -in 'CLAUDE_CODE_EFFORT_LEVEL','CLAUDE_CODE_SUBAGENT_EFFORT'`
-
-Precedencia del esfuerzo de un subagente: `CLAUDE_CODE_EFFORT_LEVEL`, luego el parámetro `effort` de la invocación, luego el campo `effort` del frontmatter, luego el esfuerzo del agente padre (solo si no hay campo) y por último `CLAUDE_CODE_SUBAGENT_EFFORT`. Procedimiento: Orchestrator ejecuta la comprobación de las variables anteriores en su sesión, revisa que sus invocaciones no pasen parámetro `effort` y registra el resultado en el informe de la tarea. Registro de TASK-002: docs/reviews/claude/TASK-002.md (ORC-02 y ORC-03).
-
-Recarga: los permisos de `.claude/settings.json` y las ediciones de `.claude/agents/*.md` se aplican sin reiniciar (los agentes, en la siguiente delegación). `disableClaudeAiConnectors` no está documentado como recarga en caliente: su validación efectiva exigiría reinicio y comprobación con Connectors y la tarjeta Context en Desktop (`/mcp` y `/context` son complementarios y solo de terminal). En sesiones locales de Desktop no alcanza a los conectores claude.ai (RUNTIME, L1) y su comprobación quedó cancelada por DH-G1.
-
-No existe un comando documentado que liste las herramientas efectivas de un subagente. La autodescripción del propio subagente se registra como evidencia de grado "autoinformado".
-
-Grados de evidencia: verificado directamente (salida de herramienta o comando observada por quien registra, o confirmación humana de la interfaz transcrita), autoinformado (declarado por el agente) y no verificable. La etiqueta heredada "verificado por CLI" de los informes históricos se lee como "verificado directamente". `high` es el esfuerzo configurado; el efectivo es "no verificable" salvo observación humana registrada (DH-G1 canceló esa observación). El `effortLevel` global (RV-03) es un factor conocido y no se modifica.
-
-Ninguna de estas comprobaciones es prerrequisito de G1: DH-G1 canceló o declaró complementarias las que no tienen equivalente en Desktop. Los informes distinguen validación estática de validación efectiva no ejecutada.
+Desktop con permisos manuales; no usar bypass. Revisa el selector al iniciar sesión y registra el modelo/esfuerzo efectivo solo si es observable. No repitas la auditoría de F1 ni compruebes MCP/CLI en cada tarea. Las limitaciones y evidencias históricas están en [AGENT_RUNTIME_HISTORY.md](AGENT_RUNTIME_HISTORY.md) y los informes de F1. No cambia DH-G1 ni se da por resuelto ningún riesgo residual.
 
 ## Handoff
 TASK-ID, alcance, dependencias, riesgos, criterios y comandos, más dos listas obligatorias:
@@ -59,7 +16,13 @@ TASK-ID, alcance, dependencias, riesgos, criterios y comandos, más dos listas o
 
 Una escritura fuera de la lista no se hace: el agente se detiene y la devuelve a Orchestrator. La propiedad de `tests/` por subdirectorio está en docs/TESTING_GUIDELINES.md.
 
-Testing PRE define casos; Develop implementa; Testing POST inspecciona y ejecuta; FAIL vuelve a Develop con hallazgos; Testing RETEST revalida. Tras dos ciclos sin progreso, dividir o escalar. BLOCKED detiene aprobación. Un solo escritor activo y mismo workspace; no confundir conversaciones de roles con agentes nativos.
+## Flujo según riesgo (vigente desde después de TASK-006)
+- Estándar: Orchestrator fija criterios concretos a partir del contrato de Testing → Develop implementa → Testing POST revisa el diff y ejecuta pruebas independientes aplicables. Ejemplos: UI, CRUD no crítico sobre patrones de seguridad ya verificados, documentación o refactors acotados sin cambio de autorización.
+- Crítica: PRE independiente → Develop → Testing POST. Aplica a cambios de autenticación, sesiones, RLS, roles/membresías, secretos, migraciones con impacto en datos, invariantes nuevas, concurrencia, transacciones o idempotencia. Ante duda razonable, usa PRE. También se puede usar PRE en tareas complejas si evita retrabajo. No reclasificar para esquivar una prueba.
+- En ambos: FAIL vuelve a Develop con hallazgos accionables; Testing RETEST comprueba los casos afectados y regresiones pertinentes. Tras dos ciclos sin progreso, dividir o escalar. BLOCKED detiene aprobación de la tarea/puerta; se permite trabajo independiente explícitamente autorizado sin declarar cumplido el criterio bloqueado. Un solo escritor activo y mismo workspace; no confundir conversaciones de roles con agentes nativos.
+- Usar criterios existentes, suites y fixtures antes de crear más. Los checks propios de Develop no reemplazan Testing. Ejecutar suite completa en CI y puertas, y localmente si el impacto es transversal. No rebajar criterios, omitir casos aplicables, ni convertir evidencia estática en integración real. Un resultado de CI solo vale para el SHA y entorno comprobados.
+- Contexto: handoff corto con referencias de archivos/secciones, no copiar documentos completos. Reutilizar contexto de la misma tarea cuando sea posible; sesión nueva por fase o cuando el contexto esté saturado. Informes breves, salida de tests resumida y extractos relevantes. No invocar agentes para tareas puramente administrativas del orquestador (estado Git, registro o consulta CI), salvo que requieran revisión de código o contrato.
+- La elección de PRE y esfuerzo se registra en una línea del handoff. Los 3 agentes siguen siendo obligatorios para desarrollo funcional; no se añaden agentes. El ahorro de tokens no justifica reducir seguridad ni pruebas.
 
 Codex revisa hitos en una sesión separada sobre SHA/diff estable, sin editar. Orchestrator registra sus hallazgos y vuelve al ciclo. El humano aprueba criterios, merge y deploy.
 
@@ -75,7 +38,7 @@ git diff --cached --name-only
 git ls-files --others --ignored --exclude-standard --directory | grep -E '(^|/)(\.env[^/]*|secrets/?|\.claude/settings\.local\.json)$' || echo "sin ignorados sensibles"
 ```
 
-Qué comparar: el SHA y la rama no cambian sin autorización; no hay archivos en staging salvo autorización; los archivos modificados y sin rastrear pertenecen a la lista permitida de la tarea (más los informes de Testing); la lista de ignorados sensibles no gana entradas nuevas respecto a la línea base. `.claude/settings.local.json` figura en el filtro por nombre: no se abre, su revisión es del humano, se compara con la línea base y su presencia no es un fallo. Solo se listan nombres de rutas: no se lee su contenido. Dónde registrar: en el informe de la fase (docs/reviews/claude/TASK-NNN-FASE.md) o en el mensaje de Orchestrator, con la salida literal y el exit code. Una diferencia fuera de la lista permitida es un hallazgo High: se detiene el ciclo, se informa al humano y no se revierte con comandos destructivos sin su autorización.
+Qué comparar: el SHA y la rama no cambian sin autorización; no hay archivos en staging salvo autorización; los archivos modificados y sin rastrear pertenecen a la lista permitida de la tarea (más los informes de Testing); la lista de ignorados sensibles no gana entradas nuevas respecto a la línea base. `.claude/settings.local.json` figura en el filtro por nombre: no se abre, su revisión es del humano, se compara con la línea base y su presencia no es un fallo. Solo se listan nombres de rutas: no se lee su contenido. Dónde registrar: en el informe o mensaje de Orchestrator, con SHA, rama, exit codes y resumen de diferencias; adjuntar salida literal relevante solo ante anomalías. Reutilizar el snapshot posterior como línea base de la siguiente delegación si no hubo cambios intermedios. Una diferencia fuera de la lista permitida es un hallazgo High: se detiene el ciclo, se informa al humano y no se revierte con comandos destructivos sin su autorización.
 
 ### Comparación de contenido (recomendada para árboles con cambios)
 La comprobación por nombres no detecta una edición adicional sobre un archivo que ya estaba modificado o sin rastrear (AUD-04). Con el árbol limpio basta la comprobación por nombres. Con cambios, Orchestrator guarda un manifiesto de `git hash-object` antes de la delegación y otro después, sobre `git diff --name-only HEAD` más `git ls-files --others --exclude-standard`:
@@ -109,7 +72,7 @@ Las reglas deny y ask de `.claude/settings.json` no son una frontera absoluta. N
 Tampoco se activan hooks de frontmatter para aplicar límites por ruta: es una decisión pendiente del humano y no forma parte de TASK-002.
 
 ## Evidencia
-Usar docs/reviews/TEMPLATE.md. Conservar solo extractos saneados de invocaciones reales, resultados y SHA. Nunca crear informes retrospectivos ficticios. Registrar modelos/esfuerzos no verificables como tales.
+Usar docs/reviews/TEMPLATE.md de forma proporcional. Un informe final por tarea puede enlazar o resumir las fases reales sin duplicar su texto; preservar los informes independientes de Testing. Conservar solo extractos saneados de invocaciones reales, resultados y SHA. Nunca crear informes retrospectivos ficticios. Registrar modelos/esfuerzos no verificables como tales.
 
 Ubicación: cuando la tarea autoriza escritura, Testing escribe `docs/reviews/claude/TASK-NNN-FASE.md`; en tareas AUDIT o de solo lectura, Testing devuelve el informe en su mensaje y Orchestrator lo registra. Las auditorías de Codex las registra Orchestrator en `docs/reviews/codex/`. Convención y saneado en los README de cada directorio.
 

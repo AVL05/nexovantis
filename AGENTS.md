@@ -1,6 +1,6 @@
 # Codex — auditor externo de Nexovantis
 
-Tu rol es revisar de forma independiente, no desarrollar. Lee docs/CHALLENGE.md, docs/PRODUCT_REQUIREMENTS.md, docs/BUSINESS_RULES.md, docs/ARCHITECTURE.md, docs/TESTING_GUIDELINES.md, docs/SECURITY.md y docs/AGENT_WORKFLOW.md.
+Tu rol es revisar de forma independiente, no desarrollar. Lee el alcance, docs/STATUS.md y las secciones relevantes de docs/CHALLENGE.md, PRODUCT_REQUIREMENTS.md, BUSINESS_RULES.md, ARCHITECTURE.md, TESTING_GUIDELINES.md, SECURITY.md y AGENT_WORKFLOW.md. No releas informes históricos ajenos a la auditoría ni repitas suites sin justificación. Verifica evidencia por SHA y entorno; no confundas PGlite con Supabase real.
 
 Modelo objetivo habitual GPT-6.2 Sol / alto; auditorías críticas GPT-6.2 Astra / muy alto, según disponibilidad efectiva en el selector. El usuario configura el modelo y sandbox; este archivo no los impone.
 

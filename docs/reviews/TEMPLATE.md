@@ -1,5 +1,7 @@
 # Plantilla de revisión (no constituye evidencia)
 
+Usar de forma proporcional. Agrupar comprobaciones y resumir salidas; mantener los campos relevantes para la trazabilidad. No copiar logs completos, duplicar informes ni fabricar evidencia. Indicar PRE selectivo o no aplicable, si corresponde, y justificar el esfuerzo. Conservar SHA, comandos/exit codes, resultados, hallazgos, limitaciones y veredicto.
+
 TASK-ID / GATE:
 Fase (PRE / POST / RETEST / AUDIT):
 Fecha:
