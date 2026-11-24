@@ -1,0 +1,10 @@
+# Artefactos generados y dependencias
+node_modules
+.next
+out
+coverage
+test-results
+playwright-report
+blob-report
+next-env.d.ts
+pnpm-lock.yaml

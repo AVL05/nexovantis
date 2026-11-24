@@ -1,0 +1,44 @@
+# Dependencies and output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+# Test output
+playwright-report/
+test-results/
+blob-report/
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.vercel/
+.claude/settings.local.json
+.claude/agent-memory-local/
+supabase/.temp/
+supabase/.branches/
+# Generic credentials and private keys
+/secrets/
+/.secrets/
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+service-account*.json
+credentials*.json
+# Local agent state
+.claude/agent-memory/
+.claude/worktrees/
+CLAUDE.local.md
+# Database dumps
+*.dump
+# Local logs and editor
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
