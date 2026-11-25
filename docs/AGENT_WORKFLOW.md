@@ -1,7 +1,7 @@
 # Flujo multiagente
 
 ## Modelos objetivo
-Orchestrator: Claude Opus 5.5 medium en tareas estándar, high en críticas; Extra solo en bloqueos complejos justificados. Develop y Testing: Sonnet 5.5 medium por defecto; high en críticas mediante parámetro de invocación si está disponible, y escalar a Opus solo con permiso. Codex: GPT-6.2 Sol alto para hitos; Astra muy alto en seguridad, concurrencia y auditoría final. Los alias opus/sonnet se resuelven según disponibilidad: comprobar en los selectores de Claude Code Desktop (la terminal es un complemento opcional) y registrar valores efectivos solo cuando sean visibles. No añadir agentes inicialmente ni activar consumo de pago.
+Orchestrator, Develop y Testing: Sonnet medium por defecto. High solo por riesgo material o bloqueo justificado; Opus excepcional con autorización humana. Codex: Sol medio-alto para puertas, Astra alto para seguridad, concurrencia y revisión final; muy alto solo por complejidad demostrada. Configurar selectores Desktop y registrar valores efectivos solo si observables. No añadir agentes ni activar consumo de pago.
 
 ## Arranque
 Desde la raíz, iniciar Claude Code Desktop, elegir modelo y esfuerzo en sus selectores (`/model` y `/effort` son comandos de la CLI: complementarios y opcionales) y aplicar la sección "Comprobación de agentes, modelos, esfuerzos y permisos". No modificar configuración global. Comprobar overrides de esfuerzo solo si hay una discrepancia material. Revisar permisos; no usar --dangerously-skip-permissions. Los límites de archivos de los agentes son contractuales, no un sandbox; inspeccionar cada diff. Referencia: https://code.claude.com/docs/en/sub-agents
@@ -16,15 +16,13 @@ TASK-ID, alcance, dependencias, riesgos, criterios y comandos, más dos listas o
 
 Una escritura fuera de la lista no se hace: el agente se detiene y la devuelve a Orchestrator. La propiedad de `tests/` por subdirectorio está en docs/TESTING_GUIDELINES.md.
 
-## Flujo según riesgo (vigente desde después de TASK-006)
-- Estándar: Orchestrator fija criterios concretos a partir del contrato de Testing → Develop implementa → Testing POST revisa el diff y ejecuta pruebas independientes aplicables. Ejemplos: UI, CRUD no crítico sobre patrones de seguridad ya verificados, documentación o refactors acotados sin cambio de autorización.
-- Crítica: PRE independiente → Develop → Testing POST. Aplica a cambios de autenticación, sesiones, RLS, roles/membresías, secretos, migraciones con impacto en datos, invariantes nuevas, concurrencia, transacciones o idempotencia. Ante duda razonable, usa PRE. También se puede usar PRE en tareas complejas si evita retrabajo. No reclasificar para esquivar una prueba.
-- En ambos: FAIL vuelve a Develop con hallazgos accionables; Testing RETEST comprueba los casos afectados y regresiones pertinentes. Tras dos ciclos sin progreso, dividir o escalar. BLOCKED detiene aprobación de la tarea/puerta; se permite trabajo independiente explícitamente autorizado sin declarar cumplido el criterio bloqueado. Un solo escritor activo y mismo workspace; no confundir conversaciones de roles con agentes nativos.
-- Usar criterios existentes, suites y fixtures antes de crear más. Los checks propios de Develop no reemplazan Testing. Ejecutar suite completa en CI y puertas, y localmente si el impacto es transversal. No rebajar criterios, omitir casos aplicables, ni convertir evidencia estática en integración real. Un resultado de CI solo vale para el SHA y entorno comprobados.
-- Contexto: handoff corto con referencias de archivos/secciones, no copiar documentos completos. Reutilizar contexto de la misma tarea cuando sea posible; sesión nueva por fase o cuando el contexto esté saturado. Informes breves, salida de tests resumida y extractos relevantes. No invocar agentes para tareas puramente administrativas del orquestador (estado Git, registro o consulta CI), salvo que requieran revisión de código o contrato.
-- La elección de PRE y esfuerzo se registra en una línea del handoff. Los 3 agentes siguen siendo obligatorios para desarrollo funcional; no se añaden agentes. El ahorro de tokens no justifica reducir seguridad ni pruebas.
-
-Codex revisa hitos en una sesión separada sobre SHA/diff estable, sin editar. Orchestrator registra sus hallazgos y vuelve al ciclo. El humano aprueba criterios, merge y deploy.
+## Flujo orientado a entrega (desde F4)
+- Una tarea por módulo completo. Orchestrator fija criterios y riesgos; Develop implementa; Testing POST independiente revisa diff y ejecuta casos aplicables. No reducir reglas de negocio, RLS, transacciones, aislamiento ni criterios de aceptación.
+- PRE excepcional: criterios nuevos insuficientemente definidos, riesgo difícil de verificar después o migración destructiva. Para riesgos conocidos, incluidos Auth/RLS, invariantes y concurrencia, criterios explícitos y POST dirigido pueden bastar; justificar en una línea. No omitir casos negativos ni pruebas reales de concurrencia exigibles.
+- FAIL vuelve a Develop con hallazgos accionables y Testing RETEST verifica cambios y regresiones relevantes. BLOCKED impide aprobar criterio/puerta; solo trabajo independiente autorizado puede continuar. Tras dos ciclos sin progreso, dividir o escalar. Medium/Low/Informational fuera de criterios se registran y agrupan para F7 con aceptación humana.
+- Reutilizar suites, fixtures y componentes. Checks dirigidos; regresión completa en CI sobre SHA exacto. Suites completas locales solo por necesidad material. No saltar checks obligatorios ni sustituir integración real con mocks.
+- Handoff corto y referencias precisas. Reutilizar sesión de tarea; nueva por módulo o saturación. No imprimir logs completos. Un escritor activo, mismo workspace. No delegar tareas administrativas. Premium Frontend Director solo para trabajo visual relevante.
+- Los tres agentes nativos son obligatorios para desarrollo funcional. Codex revisa puertas y riesgos relevantes sobre SHA/diff estable, con alcance focalizado. No reauditar fases cerradas sin cambio material. El humano aprueba criterios, riesgos, merge y deploy.
 
 ## Comprobación Git antes y después de cada delegación
 Orchestrator ejecuta lo siguiente en la raíz antes de invocar a develop o a testing y de nuevo cuando terminan (también tras cada RETEST):
@@ -72,9 +70,9 @@ Las reglas deny y ask de `.claude/settings.json` no son una frontera absoluta. N
 Tampoco se activan hooks de frontmatter para aplicar límites por ruta: es una decisión pendiente del humano y no forma parte de TASK-002.
 
 ## Evidencia
-Usar docs/reviews/TEMPLATE.md de forma proporcional. Un informe final por tarea puede enlazar o resumir las fases reales sin duplicar su texto; preservar los informes independientes de Testing. Conservar solo extractos saneados de invocaciones reales, resultados y SHA. Nunca crear informes retrospectivos ficticios. Registrar modelos/esfuerzos no verificables como tales.
+Usar docs/reviews/TEMPLATE.md de forma proporcional. Un registro por módulo conserva la respuesta independiente de Testing y las invocaciones/resultados reales, con autor y fase identificados. No duplicar contenido; informe separado solo cuando lo exija el alcance o una auditoría. Conservar solo extractos saneados de invocaciones reales, resultados y SHA. Nunca crear informes retrospectivos ficticios. Registrar modelos/esfuerzos no verificables como tales.
 
-Ubicación: cuando la tarea autoriza escritura, Testing escribe `docs/reviews/claude/TASK-NNN-FASE.md`; en tareas AUDIT o de solo lectura, Testing devuelve el informe en su mensaje y Orchestrator lo registra. Las auditorías de Codex las registra Orchestrator en `docs/reviews/codex/`. Convención y saneado en los README de cada directorio.
+Ubicación: registro único `docs/reviews/claude/TASK-NNN.md` con evidencia independiente de Testing; cuando se requiere informe separado y hay autorización, Testing escribe `TASK-NNN-FASE.md`. En tareas AUDIT o de solo lectura devuelve el informe en su mensaje y Orchestrator lo registra. Las auditorías de Codex las registra Orchestrator en `docs/reviews/codex/`. Convención y saneado en los README de cada directorio.
 
 ## Higiene del repositorio
 `.gitattributes` fija LF (coherente con `.editorconfig`). Los archivos ya rastreados pueden conservar CRLF en el árbol de trabajo; normalizar (`git add --renormalize`) o convertir en masa requiere autorización humana.

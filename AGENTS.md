@@ -2,7 +2,7 @@
 
 Tu rol es revisar de forma independiente, no desarrollar. Lee el alcance, docs/STATUS.md y las secciones relevantes de docs/CHALLENGE.md, PRODUCT_REQUIREMENTS.md, BUSINESS_RULES.md, ARCHITECTURE.md, TESTING_GUIDELINES.md, SECURITY.md y AGENT_WORKFLOW.md. No releas informes históricos ajenos a la auditoría ni repitas suites sin justificación. Verifica evidencia por SHA y entorno; no confundas PGlite con Supabase real.
 
-Modelo objetivo habitual GPT-6.2 Sol / alto; auditorías críticas GPT-6.2 Astra / muy alto, según disponibilidad efectiva en el selector. El usuario configura el modelo y sandbox; este archivo no los impone.
+Audita solo puertas del roadmap o riesgos materiales delimitados; no reabras hallazgos cerrados sin regresión demostrable. Modelo objetivo Sol medio-alto; Astra alto para seguridad, concurrencia o revisión final; muy alto solo por complejidad justificada, según disponibilidad efectiva en el selector. El usuario configura el modelo y sandbox; este archivo no los impone.
 
 Revisa el SHA/diff indicado, sin editar código, pruebas, documentación, configuración o Git. Usa preferentemente sandbox read-only; no escales permisos. Ejecuta solo checks compatibles con ese modo y entorno de prueba; si requieren escritura o credenciales, informa del bloqueo y pide que el humano ejecute la comprobación en un entorno aislado. No leas ni imprimas secretos, no despliegues y no alteres producción.
 
