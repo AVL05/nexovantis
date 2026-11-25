@@ -104,3 +104,35 @@ Fallo: `orders.spec.ts:100` (listado): `q=world.run` y `new RegExp(world.run)` c
 
 Correccion solo en `tests/e2e-supabase/orders.spec.ts`: clave propia `scenario = OS${world.run}` (beforeAll) en los titulos de las ordenes que crea el spec ("Revision caldera", "Orden a cancelar") y en las 3 busquedas `?q=` y el regex del enlace. Sin `.first()`/`.nth()` nuevos, aserciones sin debilitar (el conteo "una fila completada" y "ninguna cancelada" ahora son sobre datos del escenario). Clientes/tecnicos conservan `world.run` (no se buscan). inventory/activity no se tocan y no pueden contener `OS<run>`; orders.spec no crea datos que ellos cuenten (activity solo asserta por sus etiquetas y orden relativo).
 Local: tsc, eslint, prettier OK; `--list` 82 tests. Veredicto: PASS dirigido estatico; E2E real BLOCKED por CI.
+
+## DIAGNOSTICO-CI-001 (Testing, sobre 984a59e; correccion conjunta del arnes E2E autorizada por el humano)
+
+No se dispone del texto del diagnostico de Codex: cada uno de los 7 puntos se verifico leyendo el codigo real. Solo tests; sin app, migraciones, `.github/**`, `playwright.supabase.config.ts` ni `independent/**`. Sin `waitForTimeout`, retries, `.skip/.only` ni aserciones debilitadas.
+
+| # | Confirmado | Cambio |
+|---|---|---|
+| 1 | Si. `ActivityList` pinta tabla (`role=region`, `lg:block`) y `<ol aria-label>` (`lg:hidden`); el test leia `time:visible` sin esperar al 2.o evento. | activity.spec: helper `log(page)` = `region.or(list)` (las consultas por rol solo hallan la representacion visible) y `eventsOf(label)`; el orden espera `toHaveCount(2)` (alta + entrada del caso), compara `datetime` numericos descendentes y que "Entrada de stock" precede a "Articulo creado". |
+| 2 | Si. `getCrmWorld()` memoizaba UN mundo por worker; 4 specs compartian `orgA`/`run`. | `getCrmWorld(key = 'crm')`: `Map<clave, Promise>`; clave validada `^[a-z][a-z0-9-]{0,15}$`; nombres/emails llevan la clave. Cada spec usa la suya (`orders`, `quotes`, `inventory`, `activity`); `crm.spec.ts` NO se toca (clave por defecto `crm`, mismo comportamiento). |
+| 3 | Si. `world.run`/regex y `.first()` sobre datos (quotes l.176-186, activity, inventory historial de actividad). | Titulos propios (`Revision caldera ${scenario}`, `Reforma de bano ${run} (ampliado)`, etiquetas `A/F/D/O/P/I/J${run}` en activity), filas por `has: link` + `hasText`, conteos exactos (inventory: 7 eventos del articulo, 2 entradas, 7 con "Tu", 7 enlaces). `.first()` de "Tu" -> `not.toHaveCount(0)`; navegacion lateral -> `navigation {name:'Principal'}` sin `.first()`; avisos -> `getByRole('status').filter(...)`. |
+| 4 | Si. Varias ausencias iban justo tras `goto`. | Control previo: `settled()`/`listSettled()` (registro o estado vacio de esa consulta), fila de control propia o recalculo (`total` antes de "Material" ausente; heading "Todavia no hay presupuestos" antes de `getByText(title)`). |
+| 5 | Si. El `movement-error` del "31" (stock insuficiente) seguia en pantalla al comprobar el saldo tras "2.5". | Espera `movement-error` con "Revisa los campos marcados" y el error de campo "Introduce una cantidad entera mayor que 0." antes del saldo; recarga y saldo 30 persistido. |
+| 6 | Si. `today` salia del reloj del test; rango sin pagina. | `occurred_at` leido con la clave de servicio (solo preparacion) y `Intl` Europe/Madrid; dia, +-1 dia (ausente tras `settled`) y rango que abarca; PAGE_SIZE=20 (`src/lib/records/params.ts`): organizacion B, 21 entradas (+101..+121): pagina 1 = 20 (primero +121, ultimo +102, fechas descendentes), "Siguiente" -> pagina 2 = 1 (+101). |
+| 7 | Si, sin dependencias: ningun caso lee datos de otro. | Quitado `serial` en activity (7 casos, cada uno siembra su etiqueta). Se mantiene `serial` en orders, quotes e inventory (el listado de quotes/orders depende de la orden/presupuesto creados por el primer caso; inventory comparte estado y su flujo es secuencial). |
+
+Casos de actividad: 4 -> 7 (filtros, fechas y paginacion separados; orden propio). `--list`: 82 -> 85 (+3, todos de activity). 
+
+Residual deliberado: `.first()` solo donde el destino es identico y no depende de datos (enlaces "Nueva orden"/"Nuevo articulo" duplicados en panel/cabecera, boton "Cancelar orden", mensaje de referencia duplicada) y en aserciones posicionales de orden (`first()`/`last()` de la pagina 1). Dependencia de orden de fichero en activity: los eventos del caso son los mas recientes de su organizacion cuando los consulta (un worker); la paginacion usa la org. B.
+
+### Implicaciones de autenticacion y recursos de CI (analisis; sin cambios en config/CI)
+- Mundos: 5 en total (crm + 4) = 10 organizaciones y 15 usuarios creados con `auth.admin.createUser` (API de administrador, no cuenta como inicio de sesion). Antes 1 mundo compartido; coste: ~15 llamadas admin extra en `beforeAll`, del orden de segundos.
+- Limite de login: `supabase/config.toml` fija `[auth.rate_limit] sign_in_sign_ups = 300` (por 5 min e IP). Inicios reales: UI `loginAs` (crm 6, orders 4, quotes 10 incl. concurrencia, inventory 13, activity 5-8) mas `signInWithPassword` de preparacion; unas ~45-55 en total, que ademas se reparten en minutos. Con mundos aislados NO crece el numero de logins por prueba (cada caso ya iniciaba sesion); el margen frente a 300/5 min es amplio. El caso de paginacion agrega 1 login API + 1 UI. La clave por spec no reutiliza JWT entre specs: cada sesion es de un usuario distinto, sin colision de refresco (`autoRefreshToken: false`).
+- JWT/sesiones: cada spec solo ve su propio usuario; `clearCookies` se mantiene al cambiar de rol. Sin cambio en caducidad.
+- Recursos: workers=1 se mantiene (sin paralelismo extra de conexiones); la paginacion hace 22 RPC secuenciales (~1-2 s). Los especs de concurrencia ya abrian N conexiones paralelas (14/10/8) y no cambian. Datos: +~10 filas de organizaciones y +~20 eventos; irrelevante para el runner.
+- Recomendacion (no aplicada): si se quisiera paralelizar specs por fichero en el futuro, los mundos aislados lo permiten, pero habria que revisar el limite de 300/5 min y las conexiones de Postgres; hoy no es necesario.
+
+### Comprobaciones (reales, sin simular CI)
+- `npx tsc --noEmit`: exit 0. `npx eslint tests/e2e-supabase`: exit 0. `npx prettier --check tests/e2e-supabase`: OK.
+- `npx playwright test -c playwright.supabase.config.ts --list`: 85 tests en 10 ficheros (HEAD: 82; +3 de activity, justificado).
+- Busqueda de `waitForTimeout|.skip|.only|retries` en `tests/e2e-supabase/*.ts` y `support/`: sin coincidencias.
+- E2E real: NO ejecutado (sin Supabase local). Veredicto: PASS dirigido estatico; E2E real BLOCKED por CI sobre el SHA del commit de Orchestrator.
+- Riesgo residual de la ejecucion no verificada: conteos exactos introducidos (inventory 7 eventos; activity alta+entrada=2) asumen que cada accion genera exactamente un evento y que las ediciones de cabecera no generan evento (no hay accion `updated` en `ACTIVITY_ACTIONS`); si CI los contradice, es dato de comportamiento a revisar, no a relajar.

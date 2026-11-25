@@ -29,3 +29,6 @@ HEAD `0a221e6` y rama sin cambios durante las delegaciones; sin staging; diferen
 - Sin revisión visual en navegador (375–1440 px) todavía.
 - Hallazgos Low/Informational de Testing (tests e2e de carrera probabilísticos, orden de `/activity` por `occurred_at`, seed cerrado ante referencia demo existente, reutilización de `requestId`) en TASK-013-POST, para F7 con aceptación humana.
 - G4 con Codex sobre presupuestos e inventario.
+
+## DIAGNOSTICO-CI-001 (arnes E2E, Testing)
+Correccion solo de tests tras el diagnostico de Codex sobre 984a59e (7 puntos verificados contra el codigo; los 7 confirmados): mundos aislados por spec (`getCrmWorld(clave)`), selectores/etiquetas propios, esperas de control antes de ausencias, espera del error de validacion decimal, dia de Madrid desde `occurred_at`, paginacion real (20 + 1) y casos de actividad sin `serial`. Detalle, implicaciones de login/CI y resultados en TASK-013-POST.md. Local: tsc/eslint/prettier OK, `--list` 85 (antes 82). E2E real BLOCKED por CI. Sin commit (lo hace Orchestrator).

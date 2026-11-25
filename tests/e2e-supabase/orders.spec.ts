@@ -14,7 +14,7 @@ let world: CrmWorld;
 // titulos de las ordenes que crea este spec.
 let scenario: string;
 test.beforeAll(async () => {
-  world = await getCrmWorld();
+  world = await getCrmWorld('orders');
   scenario = `OS${world.run}`;
 });
 
@@ -44,6 +44,20 @@ async function createOrder(
   await expect(page.getByRole('heading', { level: 1, name: args.title })).toBeVisible();
   return page.url().split('/').pop()!.split('?')[0];
 }
+
+// La consulta del listado ya se pinto (tabla/lista o estado vacio): condicion previa de toda
+// comprobacion de ausencia en /orders (evita un falso positivo anterior al render).
+const listSettled = (page: Page) =>
+  expect(
+    page
+      .getByRole('region', { name: 'Listado de órdenes de servicio' })
+      .or(page.getByRole('list', { name: 'Listado de órdenes de servicio' }))
+      .or(
+        page.getByRole('heading', {
+          name: /^(No hay órdenes que coincidan|Todavía no hay órdenes de servicio)$/,
+        }),
+      ),
+  ).toBeVisible();
 
 const statusOf = (page: Page, text: string) =>
   expect(page.locator('header').getByText(text, { exact: true })).toBeVisible();
@@ -91,13 +105,16 @@ test('flujo demo: cliente, orden, asignar, iniciar, completar, historial y panel
   await expect(history.getByText(/Técnico asignado a/)).toBeVisible();
   await expect(history.getByText('Estado: En curso')).toBeVisible();
   await expect(history.getByText('Estado: Completada')).toBeVisible();
-  await expect(history.getByText(/Tú/).first()).toBeVisible();
+  await expect(history.getByText(/Tú/)).not.toHaveCount(0); // actor identificado en el historial
 
   // Panel: indicadores derivados de datos reales y actividad reciente.
   await page.goto('/dashboard');
   await expect(page.getByTestId('orders-completed')).toHaveText(/^[1-9]\d*$/);
   await expect(page.getByTestId('orders-open')).toHaveText(/^\d+$/);
-  await expect(page.getByRole('link', { name: title }).first()).toBeVisible();
+  // La orden aparece en ordenes recientes y en actividad reciente: ambos enlaces van a su ficha.
+  await expect(page.locator(`a[href="/orders/${id}"]`).filter({ hasText: title })).not.toHaveCount(
+    0,
+  );
   await page.getByRole('link', { name: 'Nueva orden' }).first().click();
   await expect(page).toHaveURL(/\/orders\/new$/);
 });
@@ -107,9 +124,8 @@ test('listado: busqueda, filtros por estado y tecnico, estado vacio y persistenc
 }) => {
   await loginAs(page, world.memberA);
   await page.goto(`/orders?q=${encodeURIComponent(scenario)}`);
-  await expect(
-    page.getByRole('table').getByRole('link', { name: new RegExp(scenario) }),
-  ).toBeVisible();
+  const flowTitle = `Revisión caldera ${scenario}`;
+  await expect(page.getByRole('table').getByRole('link', { name: flowTitle })).toBeVisible();
 
   await page.goto(`/orders?q=${encodeURIComponent(scenario)}&estado=completed`);
   await expect(page.getByRole('table').getByText('Completada')).toBeVisible();
@@ -173,5 +189,6 @@ test('cancelar con motivo, DH-04 al archivar y aislamiento entre organizaciones'
   await page.goto(`/orders/${id}`);
   await expect(page.getByRole('heading', { name: 'Orden no encontrada' })).toBeVisible();
   await page.goto('/orders');
+  await listSettled(page);
   await expect(page.getByText(title)).toHaveCount(0);
 });

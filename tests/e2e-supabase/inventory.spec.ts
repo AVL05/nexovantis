@@ -15,12 +15,26 @@ test.describe.configure({ mode: 'serial' });
 
 let world: CrmWorld;
 test.beforeAll(async () => {
-  world = await getCrmWorld();
+  world = await getCrmWorld('inventory');
 });
 
 // Tabla (escritorio) y lista (movil) conviven en el DOM y se alternan por CSS (`lg`): se afirma
 // siempre sobre la representacion visible del viewport.
 const visible = (locator: Locator): Locator => locator.filter({ visible: true });
+
+// La consulta del listado ya se pinto (tabla/lista o estado vacio): condicion previa de toda
+// comprobacion de ausencia en /inventory (evita un falso positivo anterior al render).
+const listSettled = (page: Page) =>
+  expect(
+    page
+      .getByRole('region', { name: 'Listado de inventario' })
+      .or(page.getByRole('list', { name: 'Listado de inventario' }))
+      .or(
+        page.getByRole('heading', {
+          name: /^(No hay artículos que coincidan|Todavía no hay artículos)$/,
+        }),
+      ),
+  ).toBeVisible();
 
 const authOptions = { auth: { persistSession: false, autoRefreshToken: false } } as const;
 
@@ -128,7 +142,10 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
   const orderId = await newOrder(owner, customer, orderTitle);
 
   await loginAs(page, world.ownerA);
-  await page.getByRole('navigation').getByRole('link', { name: 'Inventario' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Principal' })
+    .getByRole('link', { name: 'Inventario' })
+    .click();
   await expect(page).toHaveURL(/\/inventory$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Inventario' })).toBeVisible();
 
@@ -168,10 +185,15 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
     el.noValidate = true;
   });
   await registerMovement(page, { kind: 'Entrada', quantity: '2.5' });
+  // Primero el error de validacion de esta peticion (reemplaza al de stock insuficiente anterior);
+  // solo despues se comprueba que el saldo no cambio.
+  await expect(page.getByTestId('movement-error')).toContainText('Revisa los campos marcados');
+  await expect(form.getByText('Introduce una cantidad entera mayor que 0.')).toBeVisible();
   await expect(page.getByTestId('item-balance')).toHaveText('30 m');
 
-  // Consumo vinculado a una orden abierta.
+  // Consumo vinculado a una orden abierta (la recarga confirma que el saldo persistido es 30).
   await page.reload();
+  await expect(page.getByTestId('item-balance')).toHaveText('30 m');
   await registerMovement(page, {
     kind: 'Consumo en orden',
     quantity: '25',
@@ -187,6 +209,7 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
   await page.goto('/inventory?estado=bajo');
   await expect(visible(page.getByRole('link', { name }))).toBeVisible();
   await page.goto('/inventory?estado=agotado');
+  await listSettled(page);
   await expect(visible(page.getByRole('link', { name }))).toHaveCount(0);
   await expect(page.getByTestId('inventory-low')).toBeVisible();
   await page.goto(`/inventory?q=${encodeURIComponent(reference.toLowerCase())}`);
@@ -196,13 +219,15 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
   await page.goto(`/inventory/${id}`);
   await page.getByRole('button', { name: 'Archivar artículo' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Archivar', exact: true }).click();
-  await expect(page.getByText('Artículo archivado.').first()).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Artículo archivado.' })).toBeVisible();
   await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
   await expect(page.getByRole('form', { name: 'Registrar movimiento' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Editar' })).toHaveCount(0);
   await page.goto(`/inventory/${id}/edit`);
   await expect(page.getByText('Un artículo archivado es de solo lectura')).toBeVisible();
   await page.goto('/inventory');
+  await listSettled(page);
   await expect(visible(page.getByRole('link', { name }))).toHaveCount(0);
   await page.goto('/inventory?estado=archivados');
   await expect(visible(page.getByRole('link', { name }))).toBeVisible();
@@ -211,7 +236,7 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
   await page.goto(`/inventory/${id}`);
   await page.getByRole('button', { name: 'Restaurar artículo' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Restaurar', exact: true }).click();
-  await expect(page.getByText('Artículo restaurado.').first()).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Artículo restaurado.' })).toBeVisible();
   await page.reload();
   await registerMovement(page, { kind: 'Entrada', quantity: '10' });
   await expect(page.getByTestId('item-balance')).toHaveText('15 m');
@@ -226,17 +251,27 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
 
   // Actividad: eventos del articulo con actor identificado y enlace a la entidad.
   await page.goto('/activity?entidad=inventario');
-  const activity = page.getByRole('region', { name: 'Registro de actividad' });
-  await expect(activity.getByText('Entrada de stock').first()).toBeVisible();
-  await expect(activity.getByText('Consumo en orden').first()).toBeVisible();
-  await expect(activity.getByText('Artículo archivado').first()).toBeVisible();
-  await expect(activity.getByText('Artículo restaurado').first()).toBeVisible();
-  await expect(activity.getByText('Tú').first()).toBeVisible();
-  await expect(activity.getByRole('link', { name: `${name} (rev.)` }).first()).toHaveAttribute(
-    'href',
-    `/inventory/${id}`,
-  );
-  // La nota libre no se publica en la actividad.
+  const activity = page
+    .getByRole('region', { name: 'Registro de actividad' })
+    .or(page.getByRole('list', { name: 'Registro de actividad' }));
+  const rows = activity
+    .locator('tr, li')
+    .filter({ has: page.getByRole('link', { name: `${name} (rev.)`, exact: true }) });
+  const kinds = [
+    ['Artículo creado', 1],
+    ['Entrada de stock', 2],
+    ['Salida de stock', 1],
+    ['Consumo en orden', 1],
+    ['Artículo archivado', 1],
+    ['Artículo restaurado', 1],
+  ] as const;
+  for (const [text, count] of kinds) {
+    await expect(rows.filter({ hasText: text })).toHaveCount(count);
+  }
+  await expect(rows.filter({ hasText: 'Tú' })).toHaveCount(7); // todos con actor identificado
+  await expect(rows.filter({ hasText: 'Consumo en orden' })).toContainText(orderTitle);
+  await expect(rows.locator(`a[href="/inventory/${id}"]`)).toHaveCount(7); // enlace a la entidad
+  // La nota libre no se publica en la actividad (el registro ya esta pintado).
   await expect(activity.getByText('Existencia inicial')).toHaveCount(0);
 });
 
@@ -260,8 +295,19 @@ test('un miembro puede crear y mover (INV-9) y otra organizacion no ve el articu
   await other.goto(`/inventory/${id}`);
   await expect(other.getByRole('heading', { name: 'Artículo no encontrado' })).toBeVisible();
   await other.goto('/inventory');
+  await listSettled(other);
   await expect(other.getByText(`Articulo miembro ${world.run}`)).toHaveCount(0);
   await other.goto('/activity');
+  await expect(
+    other
+      .getByRole('region', { name: 'Registro de actividad' })
+      .or(other.getByRole('list', { name: 'Registro de actividad' }))
+      .or(
+        other.getByRole('heading', {
+          name: /^(No hay actividad que coincida|Todavía no hay actividad)$/,
+        }),
+      ),
+  ).toBeVisible();
   await expect(other.getByText(`Articulo miembro ${world.run}`)).toHaveCount(0);
   await other.close();
 });

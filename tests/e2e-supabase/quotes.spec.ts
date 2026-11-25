@@ -14,7 +14,7 @@ test.describe.configure({ mode: 'serial' });
 
 let world: CrmWorld;
 test.beforeAll(async () => {
-  world = await getCrmWorld();
+  world = await getCrmWorld('quotes');
 });
 
 async function createCustomer(page: Page, name: string) {
@@ -63,7 +63,10 @@ test('flujo: crear, conceptos con redondeo half-up, editar, quitar, aceptar y or
   await createCustomer(page, customer);
 
   // Entrada de navegacion real (sin botones ficticios).
-  await page.getByRole('navigation').getByRole('link', { name: 'Presupuestos' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Principal' })
+    .getByRole('link', { name: 'Presupuestos' })
+    .click();
   await expect(page).toHaveURL(/\/quotes$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Presupuestos' })).toBeVisible();
 
@@ -99,8 +102,8 @@ test('flujo: crear, conceptos con redondeo half-up, editar, quitar, aceptar y or
 
   // Quitar un concepto y editar otro: la base recalcula los totales.
   await page.getByRole('button', { name: 'Quitar concepto Material' }).click();
+  await total(page, '30,25 €'); // el recalculo confirma que la peticion ya se aplico
   await expect(page.getByRole('cell', { name: 'Material', exact: true })).toHaveCount(0);
-  await total(page, '30,25 €');
   await page.getByRole('button', { name: 'Editar concepto Mano de obra' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Cantidad', { exact: true }).fill('3');
@@ -127,7 +130,7 @@ test('flujo: crear, conceptos con redondeo half-up, editar, quitar, aceptar y or
   const history = page.locator('section[aria-labelledby="historial"]');
   await expect(history.getByText('Presupuesto creado')).toBeVisible();
   await expect(history.getByText(/Presupuesto aceptado/)).toBeVisible();
-  await expect(history.getByText(/Tú/).first()).toBeVisible();
+  await expect(history.getByText(/Tú/)).not.toHaveCount(0); // actor identificado
 
   await page.goto(`/quotes/${id}/edit`);
   await expect(page.getByText(/aceptado o rechazado es de solo lectura/)).toBeVisible();
@@ -174,17 +177,16 @@ test('listado: busqueda por texto y numero, filtros por estado, estado vacio y U
   page,
 }) => {
   await loginAs(page, world.memberA);
-  await page.goto(`/quotes?q=${encodeURIComponent(world.run)}`);
-  await expect(
-    page
-      .getByRole('table')
-      .getByRole('link', { name: new RegExp(world.run) })
-      .first(),
-  ).toBeVisible();
+  // Presupuesto aceptado por el primer caso (titulo propio de este spec).
+  const accepted = `Reforma de baño ${world.run} (ampliado)`;
+  await page.goto(`/quotes?q=${encodeURIComponent(accepted)}`);
+  await expect(page.getByRole('table').getByRole('link', { name: accepted })).toBeVisible();
 
-  await page.goto(`/quotes?q=${encodeURIComponent(world.run)}&estado=accepted`);
-  await expect(page.getByRole('table').getByText('Aceptado').first()).toBeVisible();
-  await page.goto(`/quotes?q=${encodeURIComponent(world.run)}&estado=draft`);
+  await page.goto(`/quotes?q=${encodeURIComponent(accepted)}&estado=accepted`);
+  await expect(
+    page.getByRole('table').getByRole('row').filter({ hasText: accepted }),
+  ).toContainText('Aceptado');
+  await page.goto(`/quotes?q=${encodeURIComponent(accepted)}&estado=draft`);
   await expect(
     page.getByRole('heading', { name: 'No hay presupuestos que coincidan' }),
   ).toBeVisible();
@@ -222,8 +224,8 @@ test('otra organizacion no ve ni abre los presupuestos', async ({ page }) => {
   await page.goto(href!);
   await expect(page.getByRole('heading', { name: 'Presupuesto no encontrado' })).toBeVisible();
   await page.goto('/quotes');
-  await expect(page.getByText(title)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Todavía no hay presupuestos' })).toBeVisible();
+  await expect(page.getByText(title)).toHaveCount(0);
 });
 
 // ---------------------------------------------------------------------------------------------
