@@ -728,6 +728,154 @@ describe('seq asignado tras el bloqueo del articulo (F-1)', () => {
   });
 });
 
+describe('G4-01: solo un movimiento efectivamente insertado cambia el saldo y genera su evento', () => {
+  // SQL de administracion con claims del owner (auth.uid() fijado) sin cambiar de rol.
+  const suAs = (user: string, sql: string, params: unknown[] = []) =>
+    db.asSuperuser(async (tx) => {
+      await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
+        JSON.stringify({ sub: user, role: 'authenticated' }),
+      ]);
+      return tx.query<Row>(sql, params);
+    });
+  const state = async (id: string) => ({
+    quantity: (await item(id)).quantity,
+    movements: (await movements(id)).length,
+    events: (await events(id)).length,
+  });
+
+  it('un conflicto de idempotencia (ON CONFLICT DO NOTHING) no cambia existencias ni crea evento', async () => {
+    const id = await create(s.ownerA);
+    const request = randomUUID();
+    await move(s.ownerA, id, { kind: 'in', quantity: 10, request });
+    const before = await state(id);
+    const res = await suAs(
+      s.ownerA,
+      `insert into public.stock_movements (organization_id, item_id, kind, quantity, request_id)
+       values ($1, $2, 'in', 7, $3) on conflict (organization_id, request_id) do nothing returning id`,
+      [s.orgA, id, request],
+    );
+    expect(res.rows).toHaveLength(0);
+    expect(await state(id)).toEqual(before);
+    expect(before.quantity).toBe(10);
+    // Un conflicto con una salida que dejaria saldo negativo tampoco toca nada.
+    await suAs(
+      s.ownerA,
+      `insert into public.stock_movements (organization_id, item_id, kind, quantity, request_id)
+       values ($1, $2, 'out', 3, $3) on conflict (organization_id, request_id) do nothing`,
+      [s.orgA, id, request],
+    );
+    expect(await state(id)).toEqual(before);
+  });
+
+  it('varias filas del mismo articulo en una sentencia: cada una ve el saldo de la anterior y hay un evento por fila', async () => {
+    const id = await create(s.ownerA);
+    await move(s.ownerA, id, { kind: 'in', quantity: 5 });
+    const before = await state(id);
+    await suAs(
+      s.ownerA,
+      `insert into public.stock_movements (organization_id, item_id, kind, quantity, request_id)
+       values ($1, $2, 'in', 10, gen_random_uuid()), ($1, $2, 'out', 4, gen_random_uuid()),
+              ($1, $2, 'out', 6, gen_random_uuid())`,
+      [s.orgA, id],
+    );
+    const rows = await movements(id);
+    expect(rows.slice(-3).map((r) => [r.balance_before, r.balance_after])).toEqual([
+      [5, 15],
+      [15, 11],
+      [11, 5],
+    ]);
+    expect((await item(id)).quantity).toBe(5);
+    expect(await state(id)).toEqual({
+      quantity: 5,
+      movements: before.movements + 3,
+      events: before.events + 3,
+    });
+    // INSERT ... SELECT con la misma cadena.
+    await suAs(
+      s.ownerA,
+      `insert into public.stock_movements (organization_id, item_id, kind, quantity, request_id)
+       select $1, $2::uuid, 'in', 1, gen_random_uuid() from generate_series(1, 4)`,
+      [s.orgA, id],
+    );
+    expect((await item(id)).quantity).toBe(9);
+    const chain = await movements(id);
+    for (let i = 1; i < chain.length; i += 1) {
+      expect(chain[i].balance_before).toBe(chain[i - 1].balance_after);
+    }
+  });
+
+  it('varias filas no pueden sobregirar: si una falla la sentencia entera se revierte', async () => {
+    const id = await create(s.ownerA);
+    await move(s.ownerA, id, { kind: 'in', quantity: 5 });
+    const before = await state(id);
+    await failsWith(
+      suAs(
+        s.ownerA,
+        `insert into public.stock_movements (organization_id, item_id, kind, quantity, request_id)
+         values ($1, $2, 'out', 3, gen_random_uuid()), ($1, $2, 'out', 3, gen_random_uuid())`,
+        [s.orgA, id],
+      ),
+      'NX022',
+    );
+    expect(await state(id)).toEqual(before);
+  });
+
+  it('mezcla de filas en conflicto y nuevas: solo las insertadas cambian el saldo y generan evento', async () => {
+    const id = await create(s.ownerA);
+    const request = randomUUID();
+    await move(s.ownerA, id, { kind: 'in', quantity: 10, request });
+    const before = await state(id);
+    const res = await suAs(
+      s.ownerA,
+      `insert into public.stock_movements (organization_id, item_id, kind, quantity, request_id)
+       values ($1, $2, 'in', 100, $3), ($1, $2, 'out', 4, gen_random_uuid()),
+              ($1, $2, 'in', 100, $3), ($1, $2, 'out', 2, gen_random_uuid())
+       on conflict (organization_id, request_id) do nothing returning id`,
+      [s.orgA, id, request],
+    );
+    expect(res.rows).toHaveLength(2);
+    expect((await item(id)).quantity).toBe(4);
+    expect(await state(id)).toEqual({
+      quantity: 4,
+      movements: before.movements + 2,
+      events: before.events + 2,
+    });
+    const chain = await movements(id);
+    for (let i = 1; i < chain.length; i += 1) {
+      expect(chain[i].balance_before).toBe(chain[i - 1].balance_after);
+    }
+  });
+
+  it('el saldo lo aplica un trigger AFTER INSERT: el BEFORE no modifica el articulo', async () => {
+    const rows = await su(
+      `select t.tgname, (t.tgtype & 2) <> 0 as is_before
+         from pg_trigger t where t.tgrelid = 'public.stock_movements'::regclass and not t.tgisinternal
+          and t.tgname in ('stock_movements_apply', 'stock_movements_apply_balance', 'stock_movements_event_insert')
+        order by t.tgname`,
+    );
+    expect(rows).toEqual([
+      { tgname: 'stock_movements_apply', is_before: true },
+      { tgname: 'stock_movements_apply_balance', is_before: false },
+      { tgname: 'stock_movements_event_insert', is_before: false },
+    ]);
+  });
+
+  it('ningun usuario fija saldo, seq ni saldos del movimiento (se recalculan)', async () => {
+    const id = await create(s.ownerA);
+    await move(s.ownerA, id, { kind: 'in', quantity: 5 });
+    await suAs(
+      s.ownerA,
+      `insert into public.stock_movements
+         (organization_id, item_id, kind, quantity, balance_before, balance_after, request_id)
+       values ($1, $2, 'out', 2, 999, 997, gen_random_uuid())`,
+      [s.orgA, id],
+    );
+    const last = (await movements(id)).at(-1);
+    expect(last).toMatchObject({ balance_before: 5, balance_after: 3 });
+    expect((await item(id)).quantity).toBe(3);
+  });
+});
+
 describe('inmutabilidad', () => {
   it('movimientos, detalles y eventos no se modifican, borran ni vacian (ni con administracion)', async () => {
     const id = await create(s.ownerA);

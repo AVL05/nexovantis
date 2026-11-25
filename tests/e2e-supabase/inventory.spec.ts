@@ -251,9 +251,17 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
 
   // Actividad: eventos del articulo con actor identificado y enlace a la entidad.
   await page.goto('/activity?entidad=inventario');
-  const activity = page
-    .getByRole('region', { name: 'Registro de actividad' })
-    .or(page.getByRole('list', { name: 'Registro de actividad' }));
+  // Representación del viewport (tabla en escritorio, lista en móvil), sin `.or()`: la correcta debe
+  // estar visible y la otra oculta.
+  const desktop = (page.viewportSize()?.width ?? 0) >= 1024; // `lg` de Tailwind
+  const activity = desktop
+    ? page.getByRole('region', { name: 'Registro de actividad' })
+    : page.getByRole('list', { name: 'Registro de actividad' });
+  const otherActivity = desktop
+    ? page.getByRole('list', { name: 'Registro de actividad', includeHidden: true })
+    : page.getByRole('region', { name: 'Registro de actividad', includeHidden: true });
+  await expect(activity).toBeVisible();
+  await expect(otherActivity).toBeHidden();
   const rows = activity
     .locator('tr, li')
     .filter({ has: page.getByRole('link', { name: `${name} (rev.)`, exact: true }) });
@@ -265,12 +273,22 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
     ['Artículo archivado', 1],
     ['Artículo restaurado', 1],
   ] as const;
+  // Cuenta exacta y visibilidad real de cada evento (toHaveCount no la comprueba).
+  const expectVisibleCount = async (locator: Locator, count: number) => {
+    await expect(locator).toHaveCount(count);
+    for (const element of await locator.all()) await expect(element).toBeVisible();
+  };
   for (const [text, count] of kinds) {
-    await expect(rows.filter({ hasText: text })).toHaveCount(count);
+    await expectVisibleCount(rows.filter({ hasText: text }), count);
   }
-  await expect(rows.filter({ hasText: 'Tú' })).toHaveCount(7); // todos con actor identificado
-  await expect(rows.filter({ hasText: 'Consumo en orden' })).toContainText(orderTitle);
-  await expect(rows.locator(`a[href="/inventory/${id}"]`)).toHaveCount(7); // enlace a la entidad
+  // Todos con actor identificado ("Tú" visible en cada fila) y enlace visible a la entidad.
+  await expectVisibleCount(rows, 7);
+  for (const row of await rows.all()) {
+    await expect(row.getByText(/(^|\s)Tú$/)).toBeVisible();
+    await expect(row.locator(`a[href="/inventory/${id}"]`)).toBeVisible();
+  }
+  const consumption = rows.filter({ hasText: 'Consumo en orden' });
+  await expect(consumption.getByRole('link', { name: orderTitle })).toBeVisible();
   // La nota libre no se publica en la actividad (el registro ya esta pintado).
   await expect(activity.getByText('Existencia inicial')).toHaveCount(0);
 });

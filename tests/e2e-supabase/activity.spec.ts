@@ -33,12 +33,31 @@ async function signedIn(user: CrmUser): Promise<SupabaseClient> {
   return client;
 }
 
-// Tabla (escritorio, region) y lista (móvil, ol) conviven en el DOM y se alternan por CSS (`lg`).
-// Las consultas por rol solo encuentran la representación visible, así que `log` es siempre esa.
+// Tabla (escritorio, region) y lista (móvil, ol) conviven en el DOM y se alternan por CSS (`lg`,
+// 1024 px). `log` es SIEMPRE la representación que corresponde al viewport (sin `.or()` que acepte
+// cualquiera de las dos) y `expectRepresentation` comprueba que esa es la visible y la otra está
+// oculta: si la correcta estuviera oculta, la prueba fallaría en vez de pasar por la otra.
+const LG_MIN_WIDTH = 1024;
+const isDesktop = (page: Page): boolean => (page.viewportSize()?.width ?? 0) >= LG_MIN_WIDTH;
 const log = (page: Page): Locator =>
-  page
-    .getByRole('region', { name: 'Registro de actividad' })
-    .or(page.getByRole('list', { name: 'Registro de actividad' }));
+  isDesktop(page)
+    ? page.getByRole('region', { name: 'Registro de actividad' })
+    : page.getByRole('list', { name: 'Registro de actividad' });
+const otherRepresentation = (page: Page): Locator =>
+  isDesktop(page)
+    ? page.getByRole('list', { name: 'Registro de actividad', includeHidden: true })
+    : page.getByRole('region', { name: 'Registro de actividad', includeHidden: true });
+
+const expectRepresentation = async (page: Page) => {
+  await expect(log(page)).toBeVisible();
+  await expect(otherRepresentation(page)).toBeHidden();
+};
+
+// Cuenta exacta y, después, VISIBILIDAD real de cada elemento (toHaveCount no la comprueba).
+const expectVisibleCount = async (locator: Locator, count: number) => {
+  await expect(locator).toHaveCount(count);
+  for (const element of await locator.all()) await expect(element).toBeVisible();
+};
 
 // Eventos (filas de la tabla o tarjetas de la lista) que enlazan al artículo de una etiqueta.
 const eventsOf = (page: Page, label: string): Locator =>
@@ -125,15 +144,14 @@ test('ambos roles ven la actividad de su organizacion, en solo lectura y con enl
     await expect(page).toHaveURL(/\/activity$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Actividad' })).toBeVisible();
     // Fila de control: los dos eventos del artículo de este caso (alta y entrada).
-    const events = eventsOf(page, label);
-    await expect(events).toHaveCount(2);
-    const entry = events.filter({ hasText: 'Entrada de stock' });
-    await expect(entry).toHaveCount(1);
-    await expect(entry.getByRole('link', { name: `Articulo ${label}` })).toHaveAttribute(
-      'href',
-      `/inventory/${item}`,
-    );
-    await expect(entry).toContainText(/\+12 kg · saldo 0 → 12/);
+    await expectVisibleCount(eventsOf(page, label), 2);
+    await expectRepresentation(page);
+    const entry = eventsOf(page, label).filter({ hasText: 'Entrada de stock' });
+    await expect(entry).toBeVisible();
+    const link = entry.getByRole('link', { name: `Articulo ${label}`, exact: true });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', `/inventory/${item}`);
+    await expect(entry.getByText(/\+12 kg · saldo 0 → 12/)).toBeVisible();
     // Solo lectura: ninguna acción de escritura en la página (tras renderizar el registro).
     await expect(
       page.getByRole('main').getByRole('button', { name: /archivar|restaurar|registrar/i }),
@@ -151,12 +169,13 @@ test('filtros por entidad y accion', async ({ page }) => {
 
   // Control sin filtros: el artículo tiene alta y entrada.
   await page.goto('/activity');
-  await expect(eventsOf(page, label)).toHaveCount(2);
+  await expectVisibleCount(eventsOf(page, label), 2);
+  await expectRepresentation(page);
 
   // Entidad inventario + acción stock_in: solo la entrada, nunca el alta.
   await page.goto('/activity?entidad=inventario&accion=stock_in');
-  await expect(eventsOf(page, label)).toHaveCount(1);
-  await expect(eventsOf(page, label)).toContainText('Entrada de stock');
+  await expectVisibleCount(eventsOf(page, label), 1);
+  await expect(eventsOf(page, label).getByText('Entrada de stock')).toBeVisible();
   await expect(log(page).getByText('Artículo creado')).toHaveCount(0);
 
   // Otra entidad: la consulta se pinta (registro o estado vacío) y no incluye el artículo.
@@ -177,7 +196,8 @@ test('rango de fechas por dia natural de Madrid calculado desde occurred_at del 
 
   // El día del evento (ambos extremos incluidos) lo contiene.
   await page.goto(`/activity?desde=${day}&hasta=${day}&entidad=inventario&accion=stock_in`);
-  await expect(eventsOf(page, label)).toHaveCount(1);
+  await expectVisibleCount(eventsOf(page, label), 1);
+  await expect(eventsOf(page, label).getByText('Entrada de stock')).toBeVisible();
 
   // Los días contiguos, no (antes se espera a que la consulta se pinte).
   for (const other of [shiftDay(day, -1), shiftDay(day, 1)]) {
@@ -190,7 +210,7 @@ test('rango de fechas por dia natural de Madrid calculado desde occurred_at del 
   await page.goto(
     `/activity?desde=${shiftDay(day, -1)}&hasta=${shiftDay(day, 1)}&entidad=inventario&accion=stock_in`,
   );
-  await expect(eventsOf(page, label)).toHaveCount(1);
+  await expectVisibleCount(eventsOf(page, label), 1);
 
   // Día lejano: estado vacío explícito.
   await page.goto('/activity?desde=2001-01-01&hasta=2001-01-02');
@@ -216,7 +236,8 @@ test('orden: los eventos van del mas reciente al mas antiguo', async ({ page }) 
   await page.goto('/activity');
 
   // Se espera a los dos eventos del caso (alta y entrada) antes de leer fechas y posiciones.
-  await expect(eventsOf(page, label)).toHaveCount(2);
+  await expectVisibleCount(eventsOf(page, label), 2);
+  await expectRepresentation(page);
   const times = await datetimes(page);
   expect(times.length).toBeGreaterThanOrEqual(2);
   expect(times.every(Number.isFinite)).toBe(true);
@@ -261,7 +282,9 @@ test('paginacion real: 20 eventos por pagina y segunda pagina con el mas antiguo
   await page.goto('/activity?entidad=inventario&accion=stock_in');
   await expect(pager.getByText(/^Página 1 de \d+/)).toBeVisible();
   const first = eventsOf(page, label);
-  await expect(first).toHaveCount(20);
+  await expectVisibleCount(first, 20);
+  await expectRepresentation(page);
+  // Posiciones extremas del listado ordenado (más reciente primero): semántica, no azar.
   await expect(first.first()).toContainText('+121 ud');
   await expect(first.last()).toContainText('+102 ud');
   await expect(pager.getByRole('link', { name: 'Siguiente' })).toBeVisible();
@@ -273,8 +296,8 @@ test('paginacion real: 20 eventos por pagina y segunda pagina con el mas antiguo
   await expect(page).toHaveURL(/pagina=2/);
   await expect(pager.getByText(/^Página 2 de \d+/)).toBeVisible();
   const second = eventsOf(page, label);
-  await expect(second).toHaveCount(1);
-  await expect(second).toContainText('+101 ud');
+  await expectVisibleCount(second, 1);
+  await expect(second.getByText(/\+101 ud/)).toBeVisible();
   await expect(pager.getByRole('link', { name: 'Anterior' })).toBeVisible();
 });
 
@@ -290,7 +313,8 @@ test('aislamiento: otra organizacion no ve la actividad ajena y su vista vacia e
   for (const path of ['/activity', '/activity?entidad=inventario']) {
     await page.goto(path);
     // Control: la organización B ve su propia actividad antes de comprobar la ausencia ajena.
-    await expect(eventsOf(page, own)).toHaveCount(2);
+    await expectVisibleCount(eventsOf(page, own), 2);
+    await expectRepresentation(page);
     await expect(page.getByText(`Articulo ${label}`)).toHaveCount(0);
   }
 });

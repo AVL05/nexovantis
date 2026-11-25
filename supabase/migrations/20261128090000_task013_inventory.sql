@@ -4,7 +4,7 @@
 --  INV-2 referencia unica por organizacion sin distinguir mayusculas e inmutable tras el alta;
 --        nombre, descripcion, unidad y umbral editables.
 --  INV-3 el articulo nace con saldo 0; la existencia inicial es una entrada; el saldo NO se edita
---        directamente, solo cambia por movimientos (el trigger del movimiento es el unico que puede).
+--        directamente, solo cambia por movimientos (el trigger AFTER INSERT del movimiento es el unico que puede).
 --  INV-4 movimientos entrada/salida/consumo, cantidad > 0, nota opcional <= 200 caracteres; sin
 --        anulaciones ni borrados (la correccion es un movimiento contrario). Saldo nunca negativo:
 --        bloqueo de fila (FOR UPDATE) + CHECK (quantity >= 0) en la base.
@@ -37,7 +37,7 @@
 --    FK haria que TRUNCATE public.work_orders fallase con 0A000 antes de que el trigger de
 --    inmutabilidad lo rechace con 23000 (contrato de F4 verificado por tests/integration/independent/
 --    work-orders-post.test.ts). La integridad (misma organizacion y estado no terminal) la garantiza el
---    trigger stock_movements_apply, que bloquea la orden con FOR SHARE en la propia transaccion; las
+--    trigger stock_movements_apply (BEFORE), que bloquea la orden con FOR SHARE en la propia transaccion; las
 --    ordenes no se borran ni se vacian (work_orders_prevent_delete / _truncate).
 
 -- ---------------------------------------------------------------------------------------------
@@ -290,8 +290,13 @@ begin
 end;
 $$;
 
--- Movimiento (BEFORE INSERT): bloquea el articulo, valida estado y saldo, bloquea la orden en consumos
--- y aplica el nuevo saldo. Es el UNICO camino que cambia inventory_items.quantity.
+-- Movimiento (BEFORE INSERT): SOLO prepara la fila; NO modifica el articulo. Bloquea el articulo
+-- (FOR UPDATE), valida estado, saldo y orden (FOR SHARE en consumos), asigna seq tras el bloqueo y
+-- calcula balance_before/balance_after desde el LIBRO de movimientos (el ultimo movimiento del articulo,
+-- visible tambien para las filas anteriores de la misma sentencia). El saldo del articulo lo aplica
+-- stock_movements_apply_balance (AFTER INSERT), que solo se ejecuta para una fila REALMENTE insertada:
+-- un INSERT ... ON CONFLICT DO NOTHING cuya fila no se inserta (conflicto de idempotencia) ejecuta este
+-- trigger pero no cambia existencias ni genera evento.
 create function private.stock_movements_apply()
 returns trigger
 language plpgsql
@@ -302,6 +307,7 @@ declare
   v_actor uuid := auth.uid();
   v_item public.inventory_items%rowtype;
   v_status text;
+  v_before integer;
   v_after bigint;
 begin
   if v_actor is null then
@@ -325,11 +331,18 @@ begin
     raise exception 'un articulo archivado es de solo lectura: no admite movimientos' using errcode = 'NX021';
   end if;
 
+  -- Saldo previo = saldo posterior del ultimo movimiento del articulo (0 si no hay). En una sentencia
+  -- de varias filas, cada fila ve la anterior (una funcion volatil ve los cambios de su sentencia).
+  select m.balance_after into v_before from public.stock_movements m
+    where m.organization_id = new.organization_id and m.item_id = new.item_id
+    order by m.seq desc limit 1;
+  v_before := coalesce(v_before, 0);
+
   -- Tras el bloqueo del articulo: el orden de seq es el orden de aplicacion. Siempre lo fija el trigger.
   new.seq := nextval('public.stock_movements_seq_seq');
-  new.balance_before := v_item.quantity;
-  v_after := case new.kind when 'in' then v_item.quantity::bigint + new.quantity
-                           else v_item.quantity::bigint - new.quantity end;
+  new.balance_before := v_before;
+  v_after := case new.kind when 'in' then v_before::bigint + new.quantity
+                           else v_before::bigint - new.quantity end;
   if v_after < 0 then
     raise exception 'saldo insuficiente' using errcode = 'NX022';
   end if;
@@ -349,10 +362,32 @@ begin
         using errcode = 'NX023';
     end if;
   end if;
-
-  update public.inventory_items set quantity = v_after::integer
-    where id = v_item.id and organization_id = v_item.organization_id;
   return new;
+end;
+$$;
+
+-- Movimiento (AFTER INSERT, ANTES que el evento por orden alfabetico de trigger): aplica el saldo al
+-- articulo. Solo se ejecuta para filas efectivamente insertadas. Es el UNICO camino que cambia
+-- inventory_items.quantity. El articulo sigue bloqueado por el trigger BEFORE (misma transaccion).
+create function private.stock_movements_apply_balance()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_current integer;
+begin
+  select i.quantity into v_current from public.inventory_items i
+    where i.id = new.item_id and i.organization_id = new.organization_id
+    for update;
+  if not found or v_current is distinct from new.balance_before then
+    -- Defensa en profundidad: el saldo del articulo debe ser el saldo previo del movimiento.
+    raise exception 'el saldo del articulo no coincide con el libro de movimientos' using errcode = '23000';
+  end if;
+  update public.inventory_items set quantity = new.balance_after
+    where id = new.item_id and organization_id = new.organization_id;
+  return null;
 end;
 $$;
 
@@ -388,6 +423,7 @@ revoke execute on function private.inventory_items_guard() from public, anon, au
 revoke execute on function private.inventory_items_record_event() from public, anon, authenticated;
 revoke execute on function private.prevent_inventory_change() from public, anon, authenticated;
 revoke execute on function private.stock_movements_apply() from public, anon, authenticated;
+revoke execute on function private.stock_movements_apply_balance() from public, anon, authenticated;
 revoke execute on function private.stock_movements_record_event() from public, anon, authenticated;
 
 create trigger inventory_items_guard
@@ -417,6 +453,10 @@ create trigger inventory_items_event_update
 create trigger stock_movements_apply
   before insert on public.stock_movements
   for each row execute function private.stock_movements_apply();
+-- Los triggers AFTER del mismo evento se ejecutan por orden alfabetico: primero el saldo, despues el evento.
+create trigger stock_movements_apply_balance
+  after insert on public.stock_movements
+  for each row execute function private.stock_movements_apply_balance();
 create trigger stock_movements_event_insert
   after insert on public.stock_movements
   for each row execute function private.stock_movements_record_event();
@@ -618,7 +658,8 @@ begin
     raise exception 'la clave de envio ya se uso con otro contenido' using errcode = 'NX024';
   end if;
 
-  -- balance_before, balance_after y created_by los fija el trigger stock_movements_apply.
+  -- balance_before, balance_after y created_by los fija el trigger stock_movements_apply; el saldo del
+  -- articulo lo aplica stock_movements_apply_balance (AFTER INSERT).
   insert into public.stock_movements (organization_id, item_id, kind, quantity, order_id, note, request_id)
   values (v_org, p_item_id, p_kind, p_quantity, p_order_id, v_note, p_request_id)
   returning id, balance_after into v_id, v_balance;

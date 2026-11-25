@@ -136,3 +136,48 @@ Residual deliberado: `.first()` solo donde el destino es identico y no depende d
 - Busqueda de `waitForTimeout|.skip|.only|retries` en `tests/e2e-supabase/*.ts` y `support/`: sin coincidencias.
 - E2E real: NO ejecutado (sin Supabase local). Veredicto: PASS dirigido estatico; E2E real BLOCKED por CI sobre el SHA del commit de Orchestrator.
 - Riesgo residual de la ejecucion no verificada: conteos exactos introducidos (inventory 7 eventos; activity alta+entrada=2) asumen que cada accion genera exactamente un evento y que las ediciones de cabecera no generan evento (no hay accion `updated` en `ACTIVITY_ACTIONS`); si CI los contradice, es dato de comportamiento a revisar, no a relajar.
+
+## AUDIT-004 / TASK-013-FIX (Testing POST independiente + G4-04) - 2026-11-25
+
+- Rama feat/inventory-activity, HEAD c600a31, cambios de Develop sin commit (diff + migracion aditiva y test sin seguimiento). Sonnet; esfuerzo efectivo no observable. Sin commit, push ni Cloud. Entorno: PGlite (Postgres real in-process, 1 conexion); sin Docker/psql/Supabase local.
+- **Veredicto: BLOCKED.** Todo lo ejecutable en local pasa y no hay incumplimientos ni Critical/High. No se puede verificar sin CI: la concurrencia real con varias conexiones (G4-01) y los E2E (G4-04; 85 tests listados, no ejecutados).
+
+### Matriz hallazgo -> evidencia
+| Hallazgo | Evidencia | Estado |
+|---|---|---|
+| G4-01 saldo solo por fila insertada | Lectura SQL: BEFORE sin UPDATE; AFTER `stock_movements_apply_balance` aplica y comprueba `balance_before`; seq tras FOR UPDATE; orden alfabetico apply_balance < event_insert. inventory-db (6 casos de Develop) y 6 mios en independent/task013-fix-post.test.ts: replay mismo payload y NX024 sin efectos; multifila con 2 articulos intercalados; sobregiro multifila revierte ambos; ON CONFLICT con clave de otro articulo; consumos multifila y orden cancelada NX023; UPDATE directo de saldo (-1, +1, 0) rechazado; libro inmutable; invariantes globales (saldo = ultimo balance_after = neto, >= 0, 1 detalle y 1 evento por movimiento) | PASS local |
+| G4-01 concurrencia | tests/integration/supabase/independent/task013-fix.supabase.test.ts: 8 reintentos paralelos misma clave, payloads distintos NX024, 16 salidas sobre saldo 10, mezcla, consumo vs cancelacion x6 | BLOCKED (CI) |
+| F-1 e idempotencia | inventory-db existente y casos anteriores | PASS local |
+| G4-02 id inmutable | task013-fix-hardening (Develop) y mio: orden con consumo y presupuesto aceptado, UPDATE multifila con CASE, vinculos siguen resolviendo; service_role por PostgREST 23000 (CI) | PASS local / CI pendiente |
+| G4-03 aceptacion | Develop (vacio NX016, preexistente 23503, ya vinculada) y mios: order_id sobre aceptado NX011, INSERT directo accepted NX012, otro cliente, otra organizacion, otro actor, SAVEPOINT (falla cerrado 23503), 2 presupuestos con la misma orden creada en la tx (23505 por UNIQUE), sin actor 23000, reject de vacio permitido, accept_quote vacio NX016 sin orden huerfana. xmin en PostgreSQL real y 5 accept_quote paralelos con UNA orden: CI | PASS local / CI pendiente |
+| Seed con ordenes no demo | inventory-seed (2 casos de Develop): 0 consumos sobre ordenes de usuario, idempotente; sin ordenes demo omite | PASS |
+| quote_label > 9999 | Develop: 1..99999999, firma, privilegios, search_path vacio, immutable, descripcion PRE-9999/10000/10001 | PASS |
+| Migraciones aplicadas intactas | `git diff HEAD --stat -- supabase/migrations`: solo 20261128090000 (editable, no aplicada en Cloud) | PASS |
+| Aditiva sobre datos existentes | task013-fix-post: BD con migraciones anteriores a 20261128100000 y datos reales (presupuestos, orden, articulo, movimientos); fingerprint de todas las tablas public/private identico tras aplicarla; accept_quote sigue funcionando | PASS |
+| Sin .skip/.only/.todo/xit | grep en tests/e2e-supabase y tests/integration: 0 | PASS |
+
+### G4-04 aserciones recuperadas (c600a31 -> ahora; lineas actuales)
+Comparacion: `git diff 984a59e c600a31 -- tests/e2e-supabase`. `log()` = region (>= 1024 px) o lista (movil) segun el viewport, sin `.or()`. `expectRepresentation` exige la correcta visible y la otra oculta (`includeHidden` + `toBeHidden`). `expectVisibleCount` = toHaveCount + toBeVisible de cada elemento. Sin waitForTimeout; workers 1 y mundos por spec intactos.
+- activity.spec.ts 36-60 (helpers) y 147-155: antes `getByText('Entrada de stock').first()` visible; c600a31 solo `toHaveCount` + `toContainText`. Ahora: filas visibles, entrada visible, enlace visible con href y detalle `+12 kg · saldo 0 → 12` visible.
+- activity 172-179 (filtros), 199/213 (rango de fechas), 239 (orden), 285-299 (paginacion: 20 filas visibles, representacion, `+101 ud` visible), 316 (aislamiento): `toHaveCount(n)` sin visibilidad y `.or(region, list)` pasan a `expectVisibleCount` y `expectRepresentation`. `first()`/`last()` se mantienen solo como posiciones semanticas del orden (+121/+102).
+- inventory.spec.ts ~262-292: actividad con `.or()` y conteos (`Tú` 7, enlaces 7) pasa a representacion exacta, cada tipo de evento visible, 7 filas visibles, "Tú" y enlace a la entidad visibles en cada fila, y enlace de la orden visible en el consumo (antes `toContainText`).
+- orders.spec.ts 108-117: `history.getByText(/Tú/).first()` visible; c600a31 `.not.toHaveCount(0)`. Ahora "Tú" visible en cada entrada (creada, asignada, En curso, Completada). 125-142: panel `locator(a[href]).not.toHaveCount(0)` pasa a evento "Orden creada" con enlace visible y href, y cada "Cambio de estado" visible con "Tú", dentro de Actividad reciente.
+- quotes.spec.ts 133-137: historial `Tú` `.not.toHaveCount(0)` pasa a visible en "creado" y "aceptado". Listado: fila `toContainText('Aceptado')` pasa a fila visible y badge `Aceptado` visible.
+- Sin cambios (refuerzos de c600a31, no debilitaciones): `listSettled`/`settled` como condicion previa de ausencias, toasts por `role=status`, selectores exactos de titulo, reordenaciones de comprobaciones.
+- No ejecutado: los selectores se basan en el marcado real (ActivityList, Table, OrderTimeline, QuoteTimeline, DashboardPanels). Riesgo residual de ajuste en CI; el panel no afirma un numero exacto de eventos de la orden.
+
+### Hallazgos por severidad
+- Critical/High/Medium: ninguno.
+- Low: supabase/migrations/20261128100000_task013_fix_orders_quotes_hardening.sql:68-83. La guarda acepta una orden creada en la MISMA transaccion por otra via (p. ej. `create_work_order` y luego UPDATE por SQL) con mismo actor y cliente. No es reutilizar una existente y UNIQUE(order_id) evita compartirla, pero la orden no lleva la descripcion ni el importe de `accept_quote`. Solo alcanzable con SQL multi-sentencia de administracion; ya cubierto y documentado en task013-fix-hardening.test.ts. Requiere aceptacion humana registrada.
+- Informational: (1) INSERT multifila de varios articulos en orden distinto desde dos sesiones puede producir interbloqueo de bloqueos de fila (FOR UPDATE por articulo); la RPC de una fila no (articulo y luego orden; la cancelacion solo bloquea la orden). (2) `inventory_items_guard` usa `pg_trigger_depth() < 2` (preexistente): una funcion de administracion invocada desde un trigger podria editar el saldo. (3) El helper `visible()` de inventory.spec.ts:24 (`filter({visible:true})`) es anterior a c600a31 y no se toco. (4) Un SAVEPOINT en una escritura administrativa se rechaza (falla cerrado), documentado.
+
+### Comandos reales
+- `npx vitest run -c vitest.integration.config.mts` sobre inventory-db, inventory-seed, task013-fix-hardening e independent/task013-fix-post: 4 ficheros, 95 tests, exit 0. Lote de regresion (quotes-calc, quotes-db, quotes-seed, work-orders, seed-orders, independent/{work-orders-post, quotes-post, seed-orders-post, activity-order}): 9 ficheros, 286 tests, exit 0. Nuevos de Testing: 20 (PGlite).
+- `npx tsc --noEmit` exit 0; `npx eslint tests/e2e-supabase tests/integration` exit 0; `npx prettier --check tests/e2e-supabase tests/integration` OK (el .sql no tiene parser).
+- `npx playwright test -c playwright.supabase.config.ts --list`: 85 tests en 10 ficheros; diferencia 0 respecto a HEAD (G4-04 no anade ni quita tests).
+
+### Pendiente de CI (BLOCKED, no PASS)
+`pnpm test:supabase` (nuevo task013-fix.supabase.test.ts, 8 tests de concurrencia y PostgREST) y `pnpm test:e2e:supabase` (4 specs modificados, 85 tests) sobre el SHA objetivo. Si un selector no coincide en CI se corrige en tests, no en produccion.
+
+### Archivos de Testing y Git
+Nuevos: tests/integration/independent/task013-fix-post.test.ts, tests/integration/supabase/independent/task013-fix.supabase.test.ts. Modificados (G4-04): tests/e2e-supabase/{activity,inventory,orders,quotes}.spec.ts. No se tocaron src/, migraciones, .github/ ni docs fuera de este informe. Incidente: un `git stash` accidental mio se revirtio de inmediato con `git stash pop` (estado identico, lista de stash vacia).

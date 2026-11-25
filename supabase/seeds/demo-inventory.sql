@@ -2,8 +2,8 @@
 -- Uso y garantias: docs/SEED.md. Se ejecuta con privilegios de administracion (SQL editor, conector o
 -- `psql -v ON_ERROR_STOP=1 -f supabase/seeds/demo-inventory.sql`). NO es una migracion y NO se ejecuta
 -- en Cloud sin decision humana expresa. Requiere la migracion 20261128090000. Para que existan consumos
--- vinculados a ordenes conviene haber ejecutado antes demo-orders.sql (y/o demo-quotes.sql): si una
--- organizacion no tiene ordenes abiertas, los consumos de sus fixtures se OMITEN con un aviso.
+-- vinculados a ordenes conviene haber ejecutado antes demo-orders.sql: solo se consume sobre ordenes DEMO (identidad en
+-- private.demo_fixture_identity); si una organizacion no tiene ordenes demo abiertas, los consumos de sus fixtures se OMITEN con un aviso.
 --
 -- Diseno (mismo criterio que demo-orders.sql y demo-quotes.sql):
 --  * Una sola transaccion: si algo falla no se aplica nada. Bloqueo de TRANSACCION
@@ -39,6 +39,7 @@ declare
   v_mi int;
   v_id uuid;
   v_order uuid;
+  v_orders uuid[];
   v_fixtures jsonb;
   v_plan jsonb;
   v_new jsonb;
@@ -118,6 +119,17 @@ begin
         where i.organization_id = v_org and i.entity_type = 'inventory_item' and i.fixture_key = f.value ->> 'k'
       );
 
+    -- Ordenes DEMO abiertas de la organizacion (privilegios de administracion: la identidad no es
+    -- legible para usuarios). Solo las ordenes con identidad estable de fixtures (entity_type
+    -- 'work_order', misma organizacion) y en estado no terminal: NUNCA una orden creada por un usuario.
+    select coalesce(array_agg(w.id order by w.scheduled_date, w.created_at, w.id), '{}'::uuid[])
+      into v_orders
+      from public.work_orders w
+      join private.demo_fixture_identity i
+        on i.record_id = w.id and i.organization_id = w.organization_id and i.entity_type = 'work_order'
+     where w.organization_id = v_org
+       and w.status in ('pending', 'assigned', 'in_progress');
+
     -- Actuar como el owner: mismas RPC, RLS y triggers que la aplicacion.
     perform set_config('request.jwt.claims', json_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
     set local role authenticated;
@@ -132,12 +144,8 @@ begin
       for v_m in select value from jsonb_array_elements(v_f -> 'm') loop
         v_mi := v_mi + 1;
         if v_m ->> 't' = 'consumption' then
-          -- Orden abierta de la organizacion (visible bajo RLS para el owner). Sin ella se omite.
-          select w.id into v_order
-            from public.work_orders w
-           where w.status in ('pending', 'assigned', 'in_progress')
-           order by w.scheduled_date, w.created_at, w.id
-           offset coalesce((v_m ->> 'o')::int, 0) limit 1;
+          -- Orden demo abierta de la organizacion (ver v_orders). Sin ella se omite.
+          v_order := v_orders[coalesce((v_m ->> 'o')::int, 0) + 1];
           if v_order is null then
             v_skipped := v_skipped + 1;
             continue;

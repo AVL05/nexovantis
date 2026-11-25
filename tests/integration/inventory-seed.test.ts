@@ -274,3 +274,100 @@ describe('seed demo de inventario: precondiciones', () => {
     }
   });
 });
+
+describe('seed demo de inventario: ordenes NO demo coexistentes', () => {
+  it('nunca consume sobre ordenes creadas por usuarios (aunque sean las primeras abiertas) y sigue siendo idempotente', async () => {
+    const mixed = await newDb();
+    try {
+      await mixed.exec(crmSql);
+      await mixed.exec(ordersSql);
+      const [customer] = (
+        await mixed.query<Row>(
+          `select record_id::text as id from private.demo_fixture_identity
+            where organization_id = $1 and entity_type = 'customer' order by fixture_key limit 1`,
+          [ID.norte],
+        )
+      ).rows;
+      // Ordenes de un usuario normal: fecha muy anterior, para que un criterio por "primeras abiertas" las elija.
+      const userOrders: string[] = [];
+      await mixed.transaction(async (tx) => {
+        await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
+          JSON.stringify({ sub: ID.memberNorte, role: 'authenticated' }),
+        ]);
+        await tx.exec('set local role authenticated');
+        for (let i = 0; i < 3; i += 1) {
+          const r = await tx.query<Row>(
+            `select public.create_work_order(gen_random_uuid(), $1::uuid, $2, null, 'normal', '2000-01-0${i + 1}'::date, null) as id`,
+            [customer.id, `Orden de usuario ${i + 1}`],
+          );
+          userOrders.push(String(r.rows[0].id));
+        }
+      });
+      await mixed.exec(inventorySql);
+
+      const consumed = await mixed.query<Row>(
+        `select distinct order_id::text as id from public.stock_movements where kind = 'consumption'`,
+      );
+      expect(consumed.rows.length).toBeGreaterThanOrEqual(1);
+      for (const row of consumed.rows) {
+        expect(userOrders).not.toContain(row.id);
+        const demo = await mixed.query<Row>(
+          `select 1 from private.demo_fixture_identity where entity_type = 'work_order' and record_id = $1`,
+          [row.id],
+        );
+        expect(demo.rows).toHaveLength(1);
+      }
+      const touched = await mixed.query<Row>(
+        `select count(*)::int as n from public.stock_movements where order_id = any($1::uuid[])`,
+        [userOrders],
+      );
+      expect(touched.rows[0].n).toBe(0);
+
+      const snap = async () =>
+        (
+          await mixed.query<Row>(
+            `select 'm' as k, id::text, order_id::text, balance_after::text from public.stock_movements
+             union all select 'i', id::text, quantity::text, null from public.inventory_items
+             union all select 'e', id::text, action, entity_id::text from public.activity_events
+             order by 1, 2`,
+          )
+        ).rows;
+      const first = await snap();
+      await mixed.exec(inventorySql);
+      expect(await snap()).toEqual(first);
+    } finally {
+      await mixed.close();
+    }
+  }, 120_000);
+
+  it('con solo ordenes de usuario (sin ordenes demo) omite los consumos', async () => {
+    const only = await newDb();
+    try {
+      await only.exec(crmSql);
+      const [customer] = (
+        await only.query<Row>(
+          `select record_id::text as id from private.demo_fixture_identity
+            where organization_id = $1 and entity_type = 'customer' limit 1`,
+          [ID.norte],
+        )
+      ).rows;
+      await only.transaction(async (tx) => {
+        await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
+          JSON.stringify({ sub: ID.ownerNorte, role: 'authenticated' }),
+        ]);
+        await tx.exec('set local role authenticated');
+        await tx.query(
+          `select public.create_work_order(gen_random_uuid(), $1::uuid, 'Orden de usuario', null, 'normal', '2000-01-01'::date, null)`,
+          [customer.id],
+        );
+      });
+      await only.exec(inventorySql);
+      const c = await only.query<Row>(
+        `select count(*)::int as n from public.stock_movements where kind = 'consumption'`,
+      );
+      expect(c.rows[0].n).toBe(0);
+    } finally {
+      await only.close();
+    }
+  }, 120_000);
+});

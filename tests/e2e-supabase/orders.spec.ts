@@ -105,16 +105,41 @@ test('flujo demo: cliente, orden, asignar, iniciar, completar, historial y panel
   await expect(history.getByText(/Técnico asignado a/)).toBeVisible();
   await expect(history.getByText('Estado: En curso')).toBeVisible();
   await expect(history.getByText('Estado: Completada')).toBeVisible();
-  await expect(history.getByText(/Tú/)).not.toHaveCount(0); // actor identificado en el historial
+  // Actor identificado ("Tú" visible) en CADA una de las entradas comprobadas.
+  for (const text of [
+    'Orden creada',
+    /Técnico asignado a/,
+    'Estado: En curso',
+    'Estado: Completada',
+  ]) {
+    const entry = history.getByRole('listitem').filter({ hasText: text });
+    await expect(entry).toHaveCount(1);
+    await expect(entry.getByText(/(^|\s)Tú$/)).toBeVisible();
+  }
 
   // Panel: indicadores derivados de datos reales y actividad reciente.
   await page.goto('/dashboard');
   await expect(page.getByTestId('orders-completed')).toHaveText(/^[1-9]\d*$/);
   await expect(page.getByTestId('orders-open')).toHaveText(/^\d+$/);
-  // La orden aparece en ordenes recientes y en actividad reciente: ambos enlaces van a su ficha.
-  await expect(page.locator(`a[href="/orders/${id}"]`).filter({ hasText: title })).not.toHaveCount(
-    0,
+  // La orden (completada: ya no esta entre las pendientes) aparece en "Actividad reciente" con un
+  // enlace VISIBLE a su ficha en cada uno de sus eventos recientes y con el actor identificado.
+  const recent = page.locator('section[aria-labelledby="actividad"]');
+  const ownEvents = recent
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('link', { name: title, exact: true }) });
+  const created = ownEvents.filter({ hasText: 'Orden creada' });
+  await expect(created).toHaveCount(1);
+  await expect(created.getByRole('link', { name: title, exact: true })).toBeVisible();
+  await expect(created.getByRole('link', { name: title, exact: true })).toHaveAttribute(
+    'href',
+    `/orders/${id}`,
   );
+  const changes = ownEvents.filter({ hasText: 'Cambio de estado' });
+  await expect(changes).not.toHaveCount(0); // iniciar y completar
+  for (const entry of await changes.all()) {
+    await expect(entry).toBeVisible();
+    await expect(entry.getByText(/(^|\s)Tú$/)).toBeVisible();
+  }
   await page.getByRole('link', { name: 'Nueva orden' }).first().click();
   await expect(page).toHaveURL(/\/orders\/new$/);
 });

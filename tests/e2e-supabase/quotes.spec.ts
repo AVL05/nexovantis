@@ -130,7 +130,12 @@ test('flujo: crear, conceptos con redondeo half-up, editar, quitar, aceptar y or
   const history = page.locator('section[aria-labelledby="historial"]');
   await expect(history.getByText('Presupuesto creado')).toBeVisible();
   await expect(history.getByText(/Presupuesto aceptado/)).toBeVisible();
-  await expect(history.getByText(/Tú/)).not.toHaveCount(0); // actor identificado
+  // Actor identificado ("Tú" visible) en cada entrada del historial.
+  for (const text of ['Presupuesto creado', /Presupuesto aceptado/]) {
+    const entry = history.getByRole('listitem').filter({ hasText: text });
+    await expect(entry).toHaveCount(1);
+    await expect(entry.getByText(/(^|\s)Tú$/)).toBeVisible();
+  }
 
   await page.goto(`/quotes/${id}/edit`);
   await expect(page.getByText(/aceptado o rechazado es de solo lectura/)).toBeVisible();
@@ -183,9 +188,9 @@ test('listado: busqueda por texto y numero, filtros por estado, estado vacio y U
   await expect(page.getByRole('table').getByRole('link', { name: accepted })).toBeVisible();
 
   await page.goto(`/quotes?q=${encodeURIComponent(accepted)}&estado=accepted`);
-  await expect(
-    page.getByRole('table').getByRole('row').filter({ hasText: accepted }),
-  ).toContainText('Aceptado');
+  const acceptedRow = page.getByRole('table').getByRole('row').filter({ hasText: accepted });
+  await expect(acceptedRow).toBeVisible();
+  await expect(acceptedRow.getByText('Aceptado', { exact: true })).toBeVisible();
   await page.goto(`/quotes?q=${encodeURIComponent(accepted)}&estado=draft`);
   await expect(
     page.getByRole('heading', { name: 'No hay presupuestos que coincidan' }),
