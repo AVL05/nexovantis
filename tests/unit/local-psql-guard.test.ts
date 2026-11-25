@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertServerPort,
   assertSameStack,
   AUTHORIZED_DB_URL,
   buildPsqlArgs,
@@ -80,6 +81,20 @@ describe('guarda de psql local (TASK-011-FIX2)', () => {
     expect(() => assertSameStack('t', ['a', 'b'], ['b', 'a'])).not.toThrow();
     expect(() => assertSameStack('t', ['a'], ['b'])).toThrow(/mismo stack/);
     expect(() => assertSameStack('t', ['a'], [])).toThrow(/mismo stack/);
+  });
+
+  it('puerto de servidor: solo 5432 interno con conexion al puerto publicado 54322', () => {
+    expect(() => assertServerPort('5432', '5432')).not.toThrow();
+    expect(() => assertServerPort('5432', '5432', '54322')).not.toThrow();
+    expect(() => assertServerPort('54322', '54322')).toThrow(/puerto interno/);
+    expect(() => assertServerPort('5433', '5433')).toThrow(/puerto interno/);
+    expect(() => assertServerPort('5432', '5432', '5433')).toThrow(/puerto interno/);
+    expect(() => assertServerPort('5432', '5432', '5432')).toThrow(/puerto interno/);
+    expect(() => assertServerPort('5432', '54322')).toThrow(/puerto interno/);
+    expect(() => assertServerPort('5432', '')).toThrow(/puerto interno/);
+    for (const other of ['', '0', '15432', '5432x', '5432-5440', '6543']) {
+      expect(() => assertServerPort(other, other)).toThrow(/puerto interno/);
+    }
   });
 
   it('el test de integracion aplica la guarda antes de cualquier cliente o escritura', () => {

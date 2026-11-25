@@ -6,9 +6,15 @@
 // acepta una URL externa: SUPABASE_DB_URL solo se admite si es EXACTAMENTE la conexion autorizada.
 // Los mensajes no incluyen valores recibidos (podrian llevar credenciales).
 
+// Puerto PUBLICADO por Docker en el host: es al que se conecta el cliente (psql).
+export const PUBLISHED_DB_PORT = '54322';
+// Puerto INTERNO del contenedor de Supabase local: el que informa el servidor (SHOW port,
+// inet_server_port()). Docker mapea 127.0.0.1:54322 -> contenedor:5432. Valor exacto, sin rangos.
+export const CONTAINER_DB_PORT = '5432';
+
 export const LOCAL_PSQL = {
   host: '127.0.0.1',
-  port: '54322',
+  port: PUBLISHED_DB_PORT,
   user: 'postgres',
   database: 'postgres',
   password: 'postgres',
@@ -91,6 +97,25 @@ export type PsqlInvocation = {
 /** Punto unico: valida el entorno y devuelve lo necesario para invocar psql. Lanza si no es seguro. */
 export function prepareLocalPsql(parent: Env): PsqlInvocation {
   return { env: buildPsqlEnv(parent), args: buildPsqlArgs };
+}
+
+/**
+ * Puerto que informa el servidor: la conexion va al puerto publicado (54322) pero PostgreSQL dentro
+ * del contenedor escucha en 5432. `showPort` (SHOW port) e `inetPort` (inet_server_port()) deben ser
+ * exactamente el interno; cualquier otro valor (incluido el publicado) se rechaza.
+ */
+export function assertServerPort(
+  showPort: string,
+  inetPort: string,
+  connectedPort: string = LOCAL_PSQL.port,
+): void {
+  if (
+    connectedPort !== PUBLISHED_DB_PORT ||
+    showPort.trim() !== CONTAINER_DB_PORT ||
+    inetPort.trim() !== CONTAINER_DB_PORT
+  ) {
+    throw new Error('PostgreSQL no escucha en el puerto interno local autorizado');
+  }
 }
 
 /** Comprobacion cruzada: la API y PostgreSQL deben ver exactamente los mismos ids. */

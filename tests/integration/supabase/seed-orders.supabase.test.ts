@@ -5,6 +5,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  assertServerPort,
   assertSameStack,
   LOCAL_PSQL,
   prepareLocalPsql,
@@ -56,9 +57,11 @@ const psqlIds = (sql: string) => psqlQuery(sql).split('\n').filter(Boolean);
 
 // Comprobacion cruzada de SOLO LECTURA: la API y PostgreSQL deben ser el mismo stack aislado.
 async function assertSameLocalStack(): Promise<void> {
-  if (psqlQuery('show port') !== LOCAL_PSQL.port) {
-    throw new Error('PostgreSQL no escucha en el puerto local autorizado');
-  }
+  // Cliente -> puerto publicado (54322); servidor -> puerto interno del contenedor (5432).
+  const [showPort, inetPort] = psqlQuery(
+    "select current_setting('port') || '|' || coalesce(inet_server_port()::text, '')",
+  ).split('|');
+  assertServerPort(showPort ?? '', inetPort ?? '', LOCAL_PSQL.port);
   const users = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (users.error) throw new Error('No se pudo leer auth.users por la API');
   assertSameStack(

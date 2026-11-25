@@ -89,3 +89,9 @@ Base: HEAD 2bb4e69 + cambios sin commit de Develop. Modelo solicitado Sonnet med
 - Comandos: `vitest run` de local-psql-guard + work-orders-actions + retest3-guards = 3 archivos, 19 tests OK; eslint y prettier de lo tocado exit 0; `tsc --noEmit`: 2 errores, ambos en `.next/types/validator.ts` (artefacto generado e ignorado por git, mezcla `.next/types` obsoleto de 12:19 con `.next/dev/types` de 13:03); 0 errores en src/ y tests/ -> ajeno al cambio.
 - Hallazgos: Low/Informational - el test del seed sigue sin ejecutarse localmente (BLOCKED, CI); `psql` en `ubuntu-latest` es hipotesis no verificada (fallo claro si falta).
 - Veredicto RETEST-3: H1 PASS, H2 PASS (local); BLOCKED solo la ejecucion de `seed-orders.supabase.test.ts` y `test:supabase` en CI sobre el SHA objetivo.
+
+## RETEST-4 (TASK-011-RETEST-4, 2026-11-25)
+
+- Base HEAD 058fc54 + 3 archivos sin commit. `assertServerPort` exige conexion fija 127.0.0.1:54322 y `SHOW port` e `inet_server_port()` exactamente `5432` (comparacion estricta, sin rangos; 54322, 5433, '', 15432, '5432-5440', show!=inet rechazados). Guarda de entorno PG*/PSQLRC/SUPABASE_DB_URL, orden guarda->lecturas->escrituras y comprobaciones cruzadas auth.users/organizations intactos; el seed solo anade la llamada + import. Coherente con Supabase CLI (inet_server_port ve el puerto del contenedor); ningun otro test usa el helper.
+- vitest local-psql-guard + retest3-guards 17 OK; eslint y prettier exit 0. Sin Docker/psql.
+- Veredicto RETEST-4: PASS local; BLOCKED solo la ejecucion real del job supabase en CI. Sin hallazgos.
