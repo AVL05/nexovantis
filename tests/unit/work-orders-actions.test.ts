@@ -29,10 +29,10 @@ describe('cancelOrderAction (TC-CANC-02)', () => {
     });
   });
 
-  it('segunda cancelacion: comunica que ya estaba cancelada', async () => {
+  it('segunda cancelacion: se rechaza como error', async () => {
     cancel.mockResolvedValue({ ok: true, data: { changed: false, alreadyCancelled: true } });
     expect(await cancelOrderAction(idle, form())).toEqual({
-      status: 'success',
+      status: 'error',
       message: 'La orden ya estaba cancelada.',
     });
   });

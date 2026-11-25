@@ -29,3 +29,10 @@ Bajo el aislamiento predeterminado de PostgREST (READ COMMITTED): orden de bloqu
 - Testing RETEST: **FAIL** (High: `work-orders.supabase.test.ts` esperaba el booleano de cancel en cancelaciones concurrentes). Corregido por Develop; RETEST-2 **PASS local** (130 tests de integración PGlite de los archivos afectados + 662 en el RETEST previo, 123 unit, tsc/eslint/prettier). Detalle en [TASK-011-POST](TASK-011-POST.md).
 - Pruebas independientes actualizadas por Testing (propietario) al nuevo contrato, sin relajar aserciones.
 - **BLOCKED local** (sin Docker): `work-orders.supabase.test.ts`, `seed-orders.supabase.test.ts` y E2E; los valida CI sobre el SHA objetivo. Sin build ni suites completas locales (por instrucción).
+
+## AUDIT-003-RETEST (Codex) sobre `2bb4e69`: FAIL → corregido
+CI 45610056050 en verde. BR04, ratificación DH e idempotencia del seed aprobadas por Codex (no reabiertas). Dos hallazgos:
+1. **TC-CANC-02**: la segunda cancelación debía devolver `status: 'error'` con «La orden ya estaba cancelada.». Corregido en `cancelOrderAction` (sin `revalidatePath`); estado, motivo e historial intactos; criterio de aceptación sin cambios.
+2. **High, `seed-orders.supabase.test.ts`**: `psql` podía conectar a un destino distinto del stack local desechable. Corregido (TASK-011-FIX2): conexión fija a 127.0.0.1:54322 sin URLs a libpq, `SUPABASE_DB_URL` solo si es exactamente la autorizada, entorno del hijo construido desde cero con PG* fijas, cualquier otra PG*/PSQLRC rechazada, `-X --no-psqlrc`, guarda y comprobación cruzada de solo lectura (puerto, `auth.users`, `organizations`) antes de cualquier escritura o cliente privilegiado. Módulo `tests/support/local-psql-guard.ts`.
+
+Testing RETEST-3: H1 **PASS**, H2 **PASS** en local (revisión estática y 19 unit en verde, eslint/prettier OK; `tsc` solo muestra 2 errores ajenos en `.next/types/validator.ts`, artefacto ignorado por git). La ejecución real del test del seed sigue **BLOCKED** local (sin Docker/`psql`) hasta CI sobre el nuevo SHA; que `ubuntu-latest` traiga `psql` es hipótesis sin verificar (Low). Detalle en [TASK-011-POST](TASK-011-POST.md).

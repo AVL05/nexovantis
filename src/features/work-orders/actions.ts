@@ -100,10 +100,12 @@ async function run<S extends z.ZodType<{ id: string }>>(
   if (!parsed.success) return { status: 'error', message: 'Los datos enviados no son válidos.' };
   const result = await execute(ctx, parsed.data);
   if (!result.ok) return { status: 'error', message: result.message };
+  // TC-CANC-02: cancelar una orden ya cancelada se rechaza (error), sin efecto ni evento nuevo.
+  if (result.data.alreadyCancelled === true && repeatMessage) {
+    return { status: 'error', message: repeatMessage };
+  }
   refresh(parsed.data.id);
-  // Un reintento (la orden ya estaba en ese estado) es un éxito sin efecto ni evento nuevo.
-  const repeated = result.data.alreadyCancelled === true && repeatMessage;
-  return { status: 'success', message: repeated ? repeatMessage : successMessage };
+  return { status: 'success', message: successMessage };
 }
 
 export async function assignOrderAction(

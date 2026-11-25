@@ -4,41 +4,34 @@ import { execFileSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  assertSameStack,
+  LOCAL_PSQL,
+  prepareLocalPsql,
+  type PsqlInvocation,
+} from '../../support/local-psql-guard';
 import { requireLocalSupabaseEnv } from '../../support/local-supabase';
 
 // TASK-011-FIX: el seed demo de ordenes (supabase/seeds/demo-orders.sql) sobre un Supabase LOCAL
 // AISLADO (job `supabase` de CI sobre una base recien creada): se ejecuta dos veces y debe ser
-// idempotente, con los recuentos esperados. Necesita `psql` en el PATH. La base es SUPABASE_DB_URL o,
-// si no esta definida, la URL estandar del stack local de Supabase CLI
-// (postgresql://postgres:postgres@127.0.0.1:54322/postgres); cualquier destino no local se rechaza.
+// idempotente, con los recuentos esperados. Necesita `psql` en el PATH. La conexion es FIJA al stack
+// local de Supabase CLI (127.0.0.1:54322, postgres/postgres); SUPABASE_DB_URL solo se admite si es
+// exactamente esa conexion y cualquier variable PG*/PSQLRC no autorizada se rechaza antes de escribir
+// (tests/support/local-psql-guard.ts). psql corre con entorno construido desde cero y sin psqlrc.
 // Si falta `psql` o el destino no es local, FALLA con un error claro (nunca se salta). Crea las
 // organizaciones "Demo Norte" y "Demo Sur" con un owner cada una, asi que exige que NO existan ya.
 // NO se ha ejecutado en local (sin Docker): lo valida CI.
 
 const authOptions = { auth: { persistSession: false, autoRefreshToken: false } } as const;
-const DEFAULT_LOCAL_DB_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
-const LOCAL_DB_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
-function requireLocalDbUrl(): string {
-  const value = process.env.SUPABASE_DB_URL?.trim() || DEFAULT_LOCAL_DB_URL;
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error('SUPABASE_DB_URL no es una URL valida');
-  }
-  if (
-    !['postgres:', 'postgresql:'].includes(parsed.protocol) ||
-    !LOCAL_DB_HOSTS.has(parsed.hostname)
-  ) {
-    throw new Error('SUPABASE_DB_URL no es un destino local autorizado');
-  }
-  return value;
-}
+let psql: PsqlInvocation;
+let admin: SupabaseClient;
+let norte: string;
+let sur: string;
 
 function requirePsql(): void {
   try {
-    execFileSync('psql', ['--version'], { stdio: 'ignore' });
+    execFileSync('psql', ['--version'], { stdio: 'ignore', env: psql.env });
   } catch {
     throw new Error(
       'No se encontro `psql` en el PATH: instala el cliente de PostgreSQL para esta suite',
@@ -46,21 +39,41 @@ function requirePsql(): void {
   }
 }
 
-let admin: SupabaseClient;
-let dbUrl: string;
-let norte: string;
-let sur: string;
-
 const psqlFile = (file: string) =>
-  execFileSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-q', '-f', file], {
+  execFileSync('psql', psql.args(['-q', '-f', file]), {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: psql.env,
   });
 
 const psqlQuery = (sql: string) =>
-  execFileSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-At', '-F', '|', '-c', sql], {
+  execFileSync('psql', psql.args(['-At', '-F', '|', '-c', sql]), {
     encoding: 'utf8',
+    env: psql.env,
   }).trim();
+
+const psqlIds = (sql: string) => psqlQuery(sql).split('\n').filter(Boolean);
+
+// Comprobacion cruzada de SOLO LECTURA: la API y PostgreSQL deben ser el mismo stack aislado.
+async function assertSameLocalStack(): Promise<void> {
+  if (psqlQuery('show port') !== LOCAL_PSQL.port) {
+    throw new Error('PostgreSQL no escucha en el puerto local autorizado');
+  }
+  const users = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (users.error) throw new Error('No se pudo leer auth.users por la API');
+  assertSameStack(
+    'auth.users',
+    users.data.users.map((u) => u.id),
+    psqlIds('select id from auth.users'),
+  );
+  const orgs = await admin.from('organizations').select('id');
+  if (orgs.error) throw new Error('No se pudo leer organizations por la API');
+  assertSameStack(
+    'organizations',
+    (orgs.data ?? []).map((o) => String(o.id)),
+    psqlIds('select id from public.organizations'),
+  );
+}
 
 const stats = (org: string) =>
   psqlQuery(
@@ -93,10 +106,13 @@ async function createOrg(name: string, run: string): Promise<string> {
 }
 
 beforeAll(async () => {
+  // Orden obligatorio: guardas (sin efectos) -> psql -> cliente con service role -> lecturas de
+  // verificacion cruzada -> escrituras.
+  psql = prepareLocalPsql(process.env);
   const env = requireLocalSupabaseEnv();
-  dbUrl = requireLocalDbUrl();
   requirePsql();
   admin = createClient(env.url, env.serviceKey, authOptions);
+  await assertSameLocalStack();
   const existing = await admin
     .from('organizations')
     .select('id')
@@ -109,6 +125,12 @@ beforeAll(async () => {
   const run = randomUUID().slice(0, 8);
   norte = await createOrg('Demo Norte', run);
   sur = await createOrg('Demo Sur', run);
+  // Lo creado por la API debe verse en PostgreSQL antes de sembrar nada.
+  assertSameStack(
+    'organizaciones creadas',
+    [norte, sur],
+    psqlIds(`select id from public.organizations where id in ('${norte}','${sur}')`),
+  );
   psqlFile('supabase/seeds/demo-crm.sql');
 }, 120_000);
 
