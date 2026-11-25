@@ -94,3 +94,20 @@ No se ejecutó suite completa, Playwright, e2e-supabase ni Cloud.
 
 ## Pendiente
 1. CI sobre el SHA objetivo: concurrencia real (e2e-supabase quotes.spec.ts) y regresión completa.
+
+## Cierre Orchestrator (2026-11-25): CI, Cloud y revisión visual
+
+Autor: Orchestrator, con autorización humana expresa (CI 45636395225 verde sobre `0699277`; aceptadas las observaciones de Testing: no aceptar presupuestos vacíos, importe de la orden como texto, código de error de TRUNCATE sin impacto).
+
+**Cloud (proyecto `nexovantis`, solo este proyecto):**
+- `list_migrations`: 12/12 migraciones, incluida `20261127090000_task012_quotes`. Tablas `quotes` y `quote_items` y 8 funciones de RPC presentes.
+- Precondiciones de docs/SEED.md (solo lectura): `Demo Norte` y `Demo Sur` existen una vez, 1 `owner` cada una, clientes demo con identidad (27 y 10), 15 y 7 órdenes de F4, 0 presupuestos.
+- `supabase/seeds/demo-quotes.sql` ejecutado tal cual (primera ejecución): 11 presupuestos (Norte 3 borrador / 3 aceptados / 2 rechazados; Sur 1 / 1 / 1), 11 identidades, órdenes 22 → 26 (4 generadas por aceptación: Norte 18, Sur 8), eventos de presupuesto created 11 / accepted 4 / rejected 3, 0 eventos sin actor, 0 aceptados sin orden, 0 órdenes duplicadas.
+- Segunda ejecución del mismo script: sin cambios (11 presupuestos, 11 identidades, 26 órdenes, mismos eventos). Idempotente.
+- Recálculo independiente en SQL (half-up por línea, enteros): 25 líneas, 0 diferencias de subtotal/IVA; 0 totales de presupuesto incoherentes. Comprobación manual de PRE-0006: 4×112,50 + 5,25×42,00 = 670,50 € + 10 % = 737,55 €, coincide con la lista.
+- No se escribió nada más en Cloud.
+
+**Revisión visual (Premium Frontend Director, solo lectura, servidor de desarrollo ya activo en :3000 con sesión de Demo Norte):**
+- PASS (1440 px): listado de 8 presupuestos con estados Borrador/Aceptado/Rechazado diferenciados, filtros y totales en euros con formato es-ES; formulario de alta.
+- NOT RUN: detalle, conceptos y totales, estados terminales en detalle, edición y responsive 375/768. El servidor de desarrollo devolvió 500 («Jest worker encountered 2 child process exceptions») en 8/8 detalles de presupuestos y también en 2/3 detalles de órdenes de F4 en la misma ráfaga, y se repitió tras un reintento secuencial. Sugiere inestabilidad del worker del servidor de desarrollo, no un fallo específico de F5, pero no está demostrado; no se leyeron los logs del servidor. Pendiente de repetir con un servidor reiniciado.
+- Dashboard: F5 no añadió indicadores de presupuestos al panel (no hay referencias a presupuestos en el código del dashboard); no hay coherencia que comprobar. Los presupuestos no cuentan en las órdenes del panel salvo las 4 órdenes generadas, que son órdenes pendientes normales.
