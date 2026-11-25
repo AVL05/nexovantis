@@ -134,7 +134,7 @@ group by o.name, q.status order by o.name, q.status;
 
 ## Inventario demo (TASK-013, F6)
 
-`supabase/seeds/demo-inventory.sql` crea artículos y movimientos **ficticios** (descripciones con el prefijo `[DEMO]`, cantidades enteras) para `Demo Norte` y `Demo Sur`. **No se ha ejecutado en Cloud** ni en ningún entorno persistente: solo está verificado en PGlite (`tests/integration/inventory-seed.test.ts`). Ejecutarlo en Cloud requiere decisión humana expresa.
+`supabase/seeds/demo-inventory.sql` crea artículos y movimientos **ficticios** (descripciones con el prefijo `[DEMO]`, cantidades enteras) para `Demo Norte` y `Demo Sur`. Verificado en PGlite (`tests/integration/inventory-seed.test.ts`) y **ejecutado en Cloud el 2026-11-25** con autorización humana expresa (11 artículos Norte y 5 Sur; segunda ejecución sin cambios). Cualquier nueva ejecución en Cloud requiere decisión humana expresa.
 
 - **Requisitos**: migración `20261128090000_task013_inventory` aplicada. Para que haya consumos vinculados a órdenes conviene haber ejecutado antes `demo-orders.sql` (o `demo-quotes.sql`): sin órdenes abiertas en una organización los consumos de sus fixtures se omiten con un aviso, sin fallar. Mismas precondiciones de organización y `owner` único que `demo-crm.sql`; si no se cumplen, aborta sin cambiar nada.
 - **Qué crea**: Demo Norte 11 artículos (5 disponibles, 3 con stock bajo, 2 agotados y 1 archivado con saldo) y Demo Sur 5 (2 disponibles, 1 bajo, 1 agotado y 1 archivado), con entradas, salidas y consumos en órdenes abiertas de su organización.
