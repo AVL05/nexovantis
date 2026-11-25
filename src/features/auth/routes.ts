@@ -16,8 +16,15 @@ export const SESSION_COOKIE_PATTERN = /^sb-.+-auth-token(\.\d+)?$/;
 export const CUSTOMERS_PATH = '/customers';
 export const TECHNICIANS_PATH = '/technicians';
 export const ORDERS_PATH = '/orders';
+export const QUOTES_PATH = '/quotes';
 
-const PROTECTED_PREFIXES = [DASHBOARD_PATH, CUSTOMERS_PATH, TECHNICIANS_PATH, ORDERS_PATH];
+const PROTECTED_PREFIXES = [
+  DASHBOARD_PATH,
+  CUSTOMERS_PATH,
+  TECHNICIANS_PATH,
+  ORDERS_PATH,
+  QUOTES_PATH,
+];
 
 /** Normaliza una ruta para decidir si es protegida: decodifica, une barras y pasa a minusculas. */
 function normalize(pathname: string): string {
