@@ -3,11 +3,20 @@ import Link from 'next/link';
 
 import { AppShell } from '@/components/shell/AppShell';
 import { Badge } from '@/components/ui/Badge';
+import { listRecentActivity } from '@/features/activity/service';
 import { LogoutButton } from '@/features/auth/LogoutButton';
 import { requireMembership } from '@/features/auth/session';
 import { customerService } from '@/features/customers/service';
 import { NAV_ITEMS } from '@/features/navigation/items';
 import { technicianService } from '@/features/technicians/service';
+import { workOrderService } from '@/features/work-orders/service';
+import {
+  OrderIndicators,
+  PendingOrders,
+  QuickActions,
+  RecentActivityList,
+} from '@/features/work-orders/ui/DashboardPanels';
+import { todayInMadrid } from '@/lib/records/format';
 import { createClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = { title: 'Panel · Nexovantis' };
@@ -15,28 +24,28 @@ export const dynamic = 'force-dynamic';
 
 const ROLE_LABEL = { owner: 'Propietario', member: 'Miembro' } as const;
 
-const UPCOMING_ORDERS = {
-  title: 'Órdenes de servicio',
-  text: 'Aquí seguirás el estado de cada orden, de la solicitud al cierre, cuando el módulo esté disponible.',
-} as const;
-
-const MODULES = [
-  { title: 'Clientes', href: '/customers', description: 'Clientes activos' },
-  { title: 'Técnicos', href: '/technicians', description: 'Técnicos activos' },
-] as const;
-
-/** Recuento exacto de activos (bajo RLS). Si falla, null: nunca se inventa una cifra. */
-async function activeCounts(organizationId: string, userId: string) {
+/**
+ * Datos del panel, todos derivados de filas persistidas bajo RLS. Si una consulta falla, devuelve
+ * null para esa parte (se muestra "No disponible"): nunca se inventa una cifra.
+ */
+async function loadDashboard(organizationId: string, userId: string) {
   try {
     const supabase = await createClient();
     const ctx = { supabase, organizationId, userId };
-    const [customers, technicians] = await Promise.all([
+    const [customers, technicians, orders, activity] = await Promise.all([
       customerService.countActive(ctx),
       technicianService.countActive(ctx),
+      workOrderService.dashboard(ctx, todayInMadrid()),
+      listRecentActivity(ctx, 10),
     ]);
-    return [customers.ok ? customers.data : null, technicians.ok ? technicians.data : null];
+    return {
+      customers: customers.ok ? customers.data : null,
+      technicians: technicians.ok ? technicians.data : null,
+      orders: orders.ok ? orders.data : null,
+      activity: activity.ok ? activity.data : null,
+    };
   } catch {
-    return [null, null];
+    return { customers: null, technicians: null, orders: null, activity: null };
   }
 }
 
@@ -69,7 +78,31 @@ export default async function DashboardPage() {
     );
   }
 
-  const counts = await activeCounts(membership.organizationId, user.id);
+  const data = await loadDashboard(membership.organizationId, user.id);
+
+  const modules = [
+    {
+      title: 'Clientes',
+      href: '/customers',
+      description: 'Clientes activos',
+      testId: 'count-customers',
+      value: data.customers,
+    },
+    {
+      title: 'Técnicos',
+      href: '/technicians',
+      description: 'Técnicos activos',
+      testId: 'count-technicians',
+      value: data.technicians,
+    },
+    {
+      title: 'Órdenes',
+      href: '/orders',
+      description: 'Órdenes abiertas',
+      testId: 'count-orders',
+      value: data.orders ? data.orders.open : null,
+    },
+  ];
 
   return (
     <AppShell
@@ -85,34 +118,59 @@ export default async function DashboardPage() {
           <p className="text-sm text-ink-muted">Sesión iniciada como {user.email}</p>
         </div>
 
+        <section aria-labelledby="accesos" className="flex flex-col gap-3">
+          <h2 id="accesos" className="text-base font-semibold">
+            Accesos rápidos
+          </h2>
+          <QuickActions />
+        </section>
+
+        <section aria-labelledby="indicadores" className="flex flex-col gap-3">
+          <h2 id="indicadores" className="text-base font-semibold">
+            Órdenes por estado
+          </h2>
+          <OrderIndicators data={data.orders} />
+        </section>
+
+        <div className="grid items-start gap-8 xl:grid-cols-2">
+          <section aria-labelledby="pendientes" className="flex min-w-0 flex-col gap-3">
+            <h2 id="pendientes" className="text-base font-semibold">
+              Órdenes pendientes
+            </h2>
+            <PendingOrders data={data.orders} />
+          </section>
+          <section aria-labelledby="actividad" className="flex min-w-0 flex-col gap-3">
+            <h2 id="actividad" className="text-base font-semibold">
+              Actividad reciente
+            </h2>
+            <RecentActivityList items={data.activity} />
+          </section>
+        </div>
+
         <section aria-labelledby="modulos" className="flex flex-col gap-4">
           <h2 id="modulos" className="text-base font-semibold">
             Módulos
           </h2>
           <div className="grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {MODULES.map((item, index) => (
+            {modules.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex min-h-24 flex-col gap-1 rounded-lg border border-line bg-surface p-5 hover:bg-sunken"
+                className="flex min-h-24 min-w-0 flex-col gap-1 rounded-lg border border-line bg-surface p-5 hover:bg-sunken"
               >
-                <span className="text-base font-semibold text-ink">{item.title}</span>
+                <div className="flex w-full min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                  <span className="text-base font-semibold text-ink">{item.title}</span>
+                  <Badge tone="info">Abrir</Badge>
+                </div>
                 <span className="text-sm text-ink-muted">{item.description}</span>
                 <span
-                  data-testid={`count-${item.href.slice(1)}`}
+                  data-testid={item.testId}
                   className="text-2xl font-semibold tracking-tight text-ink"
                 >
-                  {counts[index] ?? 'No disponible'}
+                  {item.value ?? 'No disponible'}
                 </span>
               </Link>
             ))}
-            <div className="flex min-h-24 min-w-0 flex-col items-start gap-2 rounded-lg border border-dashed md:col-span-2 lg:col-span-1 border-line-strong bg-surface p-5">
-              <div className="flex w-full min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                <h3 className="text-base font-semibold text-ink">{UPCOMING_ORDERS.title}</h3>
-                <Badge tone="info">Próximamente</Badge>
-              </div>
-              <p className="text-sm text-ink-muted">{UPCOMING_ORDERS.text}</p>
-            </div>
           </div>
         </section>
       </div>

@@ -71,7 +71,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 ## Qué no hace
 
-Sin órdenes, presupuestos ni inventario; no crea usuarios ni membresías; no modifica el esquema.
+`demo-crm.sql` no crea órdenes (las órdenes demo tienen su propio script, más abajo), presupuestos ni inventario; no crea usuarios ni membresías; no modifica el esquema.
 
 ## Verificación (solo lectura, como administrador)
 
@@ -93,3 +93,22 @@ Aislamiento: iniciar sesión en la aplicación como `owner.norte@example.com` (s
 ## Cómo deshacerlo
 
 No hay borrado: la aplicación no borra datos (BR02) y `activity_events` es inmutable, por lo que el historial del seed permanece. Los datos demo se **archivan** desde la aplicación (el owner puede archivarlos), no se eliminan. Un registro archivado es de solo lectura hasta que se restaura. Un borrado físico solo procedería por decisión humana expresa y fuera de estos scripts.
+
+## Órdenes demo (TASK-011, F4)
+
+`supabase/seeds/demo-orders.sql` crea órdenes de servicio **ficticias** (descripciones con el prefijo `[DEMO]`) para `Demo Norte` y `Demo Sur`. **No se ha ejecutado en Cloud** ni en ningún entorno persistente: solo está verificado en PGlite (`tests/integration/seed-orders.test.ts`). Ejecutarlo en Cloud requiere decisión humana expresa.
+
+- **Requisitos**: migración `20261126090000_task011_work_orders` aplicada y `demo-crm.sql` ejecutado antes (las órdenes enlazan clientes y técnicos demo por su identidad estable). Las mismas precondiciones de organización y `owner` único que `demo-crm.sql`; si no se cumplen, aborta sin cambiar nada.
+- **Qué crea**: Demo Norte 15 órdenes (5 pendientes, 3 asignadas, 2 en curso, 4 completadas, 1 cancelada con motivo) y Demo Sur 7 (2 / 1 / 1 / 2 / 1), con fechas programadas relativas al día de la primera ejecución. Solo usa clientes y técnicos demo **activos**; un fixture cuyo cliente o técnico no existe, está archivado o no tiene identidad se omite con un `RAISE NOTICE`.
+- **Cómo lo hace**: actúa como el `owner` de cada organización y usa las mismas RPC que la aplicación (`create/assign/advance/cancel_work_order`), así que se aplican RLS, la matriz de transiciones y los eventos de actividad con el `owner` como actor. No desactiva triggers, no usa `service_role` y no escribe en `activity_events` ni en `work_orders` directamente.
+- **Idempotencia**: cada orden lleva una clave estable (`o01`…, nunca cambiar una publicada) registrada en `private.demo_fixture_identity` con `entity_type = 'work_order'`. Una segunda ejecución inserta 0 órdenes y 0 eventos, y una orden que el usuario haya avanzado, editado o cancelado no se recrea ni se revierte. Una sola transacción con `pg_advisory_xact_lock`; sin `DELETE`, `TRUNCATE` ni `DROP`.
+- **Ejecutar**: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/demo-orders.sql` (o pegar el contenido en el SQL editor), tras `demo-crm.sql`.
+- **Deshacer**: no hay borrado (las órdenes no se borran y el historial es inmutable). Las órdenes demo abiertas se cancelan desde la aplicación; las cerradas son de solo lectura.
+- **Verificación (solo lectura)**:
+
+```sql
+select o.name, w.status, count(*) as ordenes
+from public.work_orders w join public.organizations o on o.id = w.organization_id
+where o.name in ('Demo Norte', 'Demo Sur')
+group by o.name, w.status order by o.name, w.status;
+```
