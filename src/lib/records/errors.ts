@@ -24,6 +24,29 @@ export function mapDbError(error: { code?: string | null } | null | undefined): 
       return { kind: 'not_found', message: NOT_FOUND_MESSAGE };
     case '42501': // RLS o GRANT
       return { kind: 'forbidden', message: 'No tienes permiso para realizar esta acción.' };
+    case 'NX001': // transicion o reasignacion no permitida (ordenes)
+      return {
+        kind: 'conflict',
+        message: 'Ese cambio no está permitido en el estado actual de la orden. Recarga la página.',
+      };
+    case 'NX002': // cliente o tecnico inexistente, archivado o de otra organizacion
+      return {
+        kind: 'conflict',
+        message: 'El cliente o el técnico elegido no está disponible. Elige otro activo.',
+      };
+    case 'NX003':
+      return {
+        kind: 'conflict',
+        message: 'Una orden completada o cancelada es de solo lectura.',
+      };
+    case 'NX004': // archivado bloqueado por ordenes abiertas (DH-04/DH-05)
+      return {
+        kind: 'conflict',
+        message:
+          'No se puede archivar: tiene órdenes abiertas. Ciérralas, cancélalas o reasígnalas antes.',
+      };
+    case 'NX005':
+      return { kind: 'not_found', message: NOT_FOUND_MESSAGE };
     case '23000': // trigger de integridad (archivado)
     case '23505':
       return { kind: 'conflict', message: 'La operación no es posible en el estado actual.' };

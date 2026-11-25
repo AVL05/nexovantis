@@ -8,3 +8,4 @@ export { Field, FieldError, Label, inputClass, type FieldProps } from './Field';
 export { LiveRegion } from './LiveRegion';
 export { Skeleton, Spinner } from './Spinner';
 export { Table, Td, Th } from './Table';
+export { Select, type SelectOption, type SelectProps } from './Select';

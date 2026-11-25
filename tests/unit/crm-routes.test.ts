@@ -13,11 +13,16 @@ describe('rutas de Clientes y Tecnicos', () => {
     '//technicians',
     '/technicians/',
     '/technicians/abc',
+    '/orders',
+    '/orders/new',
+    '/Orders/aaaa/edit',
+    '/%6frders',
+    '//orders/',
   ])('protege %s', (path) => {
     expect(isProtectedPath(path)).toBe(true);
   });
 
-  it.each(['/customer', '/customersx', '/technician', '/api/customers'])(
+  it.each(['/customer', '/customersx', '/technician', '/api/customers', '/order', '/ordersx'])(
     'no protege %s',
     (path) => {
       expect(isProtectedPath(path)).toBe(false);
@@ -26,10 +31,10 @@ describe('rutas de Clientes y Tecnicos', () => {
 });
 
 describe('navegacion', () => {
-  it('Clientes y Tecnicos enlazan a su modulo; Ordenes sigue sin enlace', () => {
+  it('Clientes, Tecnicos y Ordenes enlazan a su modulo', () => {
     const byKey = Object.fromEntries(NAV_ITEMS.map((item) => [item.key, item.href]));
     expect(byKey.customers).toBe('/customers');
     expect(byKey.technicians).toBe('/technicians');
-    expect(byKey.orders).toBeNull();
+    expect(byKey.orders).toBe('/orders');
   });
 });
