@@ -22,5 +22,6 @@ No incluir secretos, tokens, claves, identificadores de sesión, credenciales de
 |---|---|---|---|---|
 | [AUDIT-001](AUDIT-001.md) | 2026-11-24 | Fundación (F0-F1) sobre HEAD `86611a8` con árbol de trabajo modificado | FAIL; NO-GO para F2 hasta cerrar G1 | Hallazgos AUD-01 a AUD-05 tratados en TASK-003 ([informe](../claude/TASK-003.md)) |
 | [AUDIT-002](AUDIT-002.md) | 2026-11-25 | F3 sobre `7cc19be` | FAIL; G2 abierta | Hallazgos A02-01 a A02-07 tratados en TASK-010 ([informe](../claude/TASK-010.md)); pendiente CI y reauditoría |
+| [AUDIT-002-RETEST](AUDIT-002-RETEST.md) | 2026-11-25 | Revalidación de TASK-010 sobre `33e6b1c` | FAIL; G2 abierta | A02-01, A02-05 y E2E tratados en TASK-010B ([informe](../claude/TASK-010B.md)); pendiente CI y reauditoría |
 
 El registro conserva literalmente el informe de Codex; la cabecera de Orchestrator indica su hash y el alcance de su evidencia.

@@ -66,12 +66,67 @@ test.describe('A02-01 aviso de cierre de sesion', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Iniciar sesión' })).toBeVisible();
   });
 
+  // TASK-010B / B-04 (cambio justificado): la version anterior comprobaba `page.content()`, el HTML
+  // SERIALIZADO. Next.js incluye la consulta codificada en sus datos de navegacion (scripts
+  // `self.__next_f`), de modo que la cadena aparece ahi sin que el usuario la vea ni se renderice
+  // como elemento (falso positivo reproducido por Codex en CI 45579875538; el log no acredita
+  // contenido inyectado). El objetivo de seguridad NO se relaja: sigue exigiendose que ningun aviso
+  // ni texto del parametro se muestre ni se refleje, pero ahora sobre lo RENDERIZADO: texto visible
+  // (innerText), elementos del DOM (nodos de texto y atributos, sin scripts ni estilos) y avisos.
   test('un valor de aviso desconocido no muestra nada ni se refleja en la pagina', async ({
     page,
   }) => {
-    await page.goto('/login?aviso=%3Cb%3Eotra-cosa%3C%2Fb%3E');
+    const needle = 'otra-cosa';
+    await page.goto(`/login?aviso=${encodeURIComponent(`<b>${needle}</b>`)}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Iniciar sesión' })).toBeVisible();
+
+    // Ningun aviso previsto ni imprevisto: ni por testid ni por role alert|status con texto.
     await expect(page.getByTestId('logout-notice')).toHaveCount(0);
-    expect(await page.content()).not.toContain('otra-cosa');
+    await expect(page.getByTestId('logout-failed-notice')).toHaveCount(0);
+    await expect(page.getByTestId('logout-retry')).toHaveCount(0);
+    await expect(
+      page.locator('[role="alert"], [role="status"]').filter({ hasText: /\S/ }),
+      'no debe renderizarse ningun aviso con texto',
+    ).toHaveCount(0);
+
+    // Texto visible: ni el valor del parametro ni el texto de los avisos conocidos.
+    const visible = await page.evaluate(() => document.body.innerText);
+    expect(visible).not.toContain(needle);
+    expect(visible).not.toContain('<b>');
+    expect(visible).not.toMatch(/no se pudo confirmar|se cerr[oó] en este navegador/i);
+    // Elemento inyectado: la etiqueta <b> del valor no existe como elemento renderizado.
+    await expect(page.locator('b', { hasText: needle })).toHaveCount(0);
+
+    // DOM renderizado: ningun nodo de texto ni atributo contiene el valor (se excluyen script/style,
+    // donde Next serializa datos de navegacion que no son contenido de la pagina).
+    const reflected = await page.evaluate((text) => {
+      const hits: string[] = [];
+      const walker = document.createTreeWalker(
+        document.documentElement,
+        NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+      );
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const parent = (node as Text).parentElement?.tagName;
+          if (parent === 'SCRIPT' || parent === 'STYLE') continue;
+          if ((node.nodeValue ?? '').includes(text))
+            hits.push(`texto en <${parent?.toLowerCase()}>`);
+        } else {
+          const element = node as Element;
+          if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') continue;
+          for (const attribute of Array.from(element.attributes)) {
+            if (attribute.value.includes(text)) {
+              hits.push(`atributo ${attribute.name} de <${element.tagName.toLowerCase()}>`);
+            }
+          }
+        }
+      }
+      if (document.title.includes(text)) hits.push('title');
+      return hits;
+    }, needle);
+    expect(reflected, 'el valor del parametro no debe reflejarse en el DOM renderizado').toEqual(
+      [],
+    );
   });
 });
 
@@ -134,19 +189,50 @@ test.describe('A02-07 el destino con parametros codificados sobrevive al login',
       const context = await browser.newContext({ baseURL: base });
       try {
         const page = await context.newPage();
+        const origin = new URL(base).origin;
         // Sin sesion: el proxy redirige a /login conservando el destino completo.
         await page.goto(path);
         await expect(page).toHaveURL(/\/login\?/);
+
+        // TASK-010B / B-04 (cambio justificado): antes se exigia la igualdad LITERAL de `next` con
+        // `path`, pero el proxy serializa los espacios como `+` (application/x-www-form-urlencoded)
+        // en vez de `%20`; ambas formas decodifican al mismo valor y es lo que recibe el usuario.
+        // Ahora se verifica el destino por componentes (origen, ruta, `q` decodificado) y se completa
+        // el login: antes la asercion literal detenia la prueba y el destino final no se comprobaba.
+        // Sin relajar la seguridad: `next` debe ser una ruta interna (sin origen ni `//`) y no se
+        // admiten parametros adicionales.
+        const loginUrl = new URL(page.url());
+        expect(loginUrl.origin).toBe(origin);
+        expect(loginUrl.pathname).toBe('/login');
+        const next = loginUrl.searchParams.get('next');
+        expect(next, 'el proxy debe conservar el destino en `next`').not.toBeNull();
         expect(
-          new URL(page.url()).searchParams.get('next'),
-          'el proxy debe conservar el destino',
-        ).toBe(path);
+          next!.startsWith('/') && !next!.startsWith('//'),
+          'next debe ser una ruta interna',
+        ).toBe(true);
+        const proxied = new URL(next!, origin);
+        expect(proxied.origin).toBe(origin);
+        expect(proxied.pathname).toBe('/customers');
+        expect(proxied.searchParams.get('q')).toBe(expectedQ);
+        expect([...proxied.searchParams.keys()]).toEqual(['q']);
+
+        // El formulario lleva el mismo destino (decodificado) en su campo oculto.
+        const hidden = new URL(await page.locator('input[name="next"]').inputValue(), origin);
+        expect(hidden.origin).toBe(origin);
+        expect(hidden.pathname).toBe('/customers');
+        expect(hidden.searchParams.get('q')).toBe(expectedQ);
 
         await page.locator('input[name="email"]').fill(user.email);
         await page.locator('input[name="password"]').fill(user.password);
         await page.getByRole('button', { name: SUBMIT_NAME }).click();
         await page.waitForURL((url) => url.pathname === '/customers', { timeout: 20_000 });
-        expect(new URL(page.url()).searchParams.get('q')).toBe(expectedQ);
+
+        // Destino final: origen, ruta, `q` decodificado y contenido del buscador.
+        const finalUrl = new URL(page.url());
+        expect(finalUrl.origin).toBe(origin);
+        expect(finalUrl.pathname).toBe('/customers');
+        expect(finalUrl.searchParams.get('q')).toBe(expectedQ);
+        expect([...finalUrl.searchParams.keys()]).toEqual(['q']);
         await expect(page.getByLabel('Buscar clientes por nombre, correo o teléfono')).toHaveValue(
           expectedQ,
         );

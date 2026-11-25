@@ -77,6 +77,30 @@ async function visit(url: string) {
   return render(await LoginPage({ searchParams: Promise.resolve(query) as never }));
 }
 
+/**
+ * Contrato B-02 para el estado "almacen de cookies ILEGIBLE" en /login?aviso=cierre-no-confirmado:
+ * ni se afirma que la sesion local se cerro (ni que sigue abierta), se anuncia que no se pudo
+ * confirmar/cerrar con role alert|status, y el reintento esta disponible.
+ */
+function expectLocalCloseUnknown(container: HTMLElement) {
+  const text = (container.textContent ?? '').replace(/\s+/g, ' ');
+  expect(text).not.toMatch(
+    /se cerr[oó] en este navegador|sesi[oó]n cerrada|cerrada correctamente/i,
+  );
+  expect(text).not.toMatch(/revocad/i);
+  const announced = [...container.querySelectorAll('[role="alert"], [role="status"]')];
+  expect(announced.length, 'debe haber un aviso anunciable').toBeGreaterThan(0);
+  expect(
+    announced.some((el) => /no se pudo/i.test(el.textContent ?? '')),
+    'el aviso debe decir que no se pudo cerrar/confirmar',
+  ).toBe(true);
+  const retry = screen.getByTestId('logout-retry');
+  expect(retry).toBeEnabled();
+  expect(retry).toHaveAttribute('type', 'submit');
+  expect(retry.closest('form')).not.toBeNull();
+  expect(screen.getByRole('button', { name: 'Reintentar cierre de sesión' })).toBeEnabled();
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   signOut.mockReset();
@@ -259,22 +283,24 @@ describe('P-02 casos limite de cookies', () => {
     expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
   });
 
-  it('cookies() ilegible al renderizar /login con aviso: aviso habitual, nunca afirma sesion viva ni lanza', async () => {
+  // TASK-010B / B-02 (cambio justificado): estas dos pruebas esperaban `logout-notice` ("Tu sesion se
+  // cerro en este navegador") con el almacen ILEGIBLE. Es el falso positivo del hallazgo 2 de
+  // AUDIT-002-RETEST: si no se puede leer el almacen, el cierre local es INDETERMINADO y la pagina no
+  // debe afirmarlo. Ahora fijan lo contrario; el criterio completo esta en el bloque B-02 al final.
+  it('cookies() ilegible al renderizar /login con aviso: no afirma cierre local, ofrece reintento y no lanza', async () => {
     h.cookies.mockRejectedValue(new Error('sin contexto'));
     h.hasValidSession.mockResolvedValue(false);
-    await visit(AVISO);
-    expect(screen.getByTestId('logout-notice')).toBeInTheDocument();
-    expect(screen.queryByTestId('logout-failed-notice')).toBeNull();
-    expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
+    const { container } = await visit(AVISO);
+    expectLocalCloseUnknown(container);
   });
 
-  it('cookies() que lanza de forma sincrona tampoco rompe la pagina', async () => {
+  it('cookies() que lanza de forma sincrona tampoco rompe la pagina ni afirma el cierre local', async () => {
     h.cookies.mockImplementation(() => {
       throw new Error('sync');
     });
     h.hasValidSession.mockResolvedValue(false);
-    await visit(AVISO);
-    expect(screen.getByTestId('logout-notice')).toBeInTheDocument();
+    const { container } = await visit(AVISO);
+    expectLocalCloseUnknown(container);
   });
 
   it.each([
@@ -287,5 +313,87 @@ describe('P-02 casos limite de cookies', () => {
   ])('hasLocalSessionCookies(%j) = %s', async (names, expected) => {
     useStore(makeStore(names));
     expect(await hasLocalSessionCookies()).toBe(expected);
+  });
+});
+
+describe('B-02 presentes / ausentes / ilegibles se distinguen (flujo real encadenado)', () => {
+  it('PRESENTES: la accion no pudo borrarlas -> alerta de fallo con reintento (sin afirmar cierre)', async () => {
+    useStore(makeStore([...SESSION, 'theme'], { deleteFails: true }));
+    signOut.mockResolvedValue({ error: AUTH_ERROR });
+    const url = await runLogout();
+    h.hasValidSession.mockResolvedValue(false);
+    const { container } = await visit(url);
+    expect(screen.getByTestId('logout-failed-notice')).toHaveAttribute('role', 'alert');
+    expect(screen.getByTestId('logout-retry')).toBeEnabled();
+    expect(screen.queryByTestId('logout-notice')).toBeNull();
+    expect(container.textContent).not.toMatch(/se cerr[oó] en este navegador/i);
+  });
+
+  it('AUSENTES: la accion las borro -> aviso habitual "se cerro en este navegador", sin reintento', async () => {
+    signOut.mockResolvedValue({ error: AUTH_ERROR });
+    const url = await runLogout();
+    expect(store.getAll().map((c) => c.name)).toEqual(['theme']);
+    h.hasValidSession.mockResolvedValue(false);
+    await visit(url);
+    const notice = screen.getByTestId('logout-notice');
+    expect((notice.textContent ?? '').replace(/\s+/g, ' ')).toMatch(
+      /se cerr[oó] en este navegador/i,
+    );
+    expect(screen.queryByTestId('logout-failed-notice')).toBeNull();
+    expect(screen.queryByTestId('logout-retry')).toBeNull();
+    expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
+  });
+
+  it('ILEGIBLES en accion y render (cookies() rechaza siempre): no afirma cierre local y ofrece reintento', async () => {
+    h.cookies.mockRejectedValue(new Error('almacen ilegible'));
+    h.hasValidSession.mockResolvedValue(false);
+    signOut.mockResolvedValue({ error: AUTH_ERROR });
+    const url = await runLogout();
+    // La accion no puede ni borrar ni comprobar; igualmente redirige a un aviso de /login.
+    expect(url.startsWith('/login?aviso=')).toBe(true);
+    expect(url).not.toContain('tecnico-secreto-777');
+    const { container } = await visit(url);
+    expectLocalCloseUnknown(container);
+  });
+
+  it('ILEGIBLES: createClient lanza y el almacen no se puede leer (accion y render)', async () => {
+    h.createClient.mockRejectedValue(new Error('sin configuracion'));
+    h.cookies.mockRejectedValue(new Error('almacen ilegible'));
+    h.hasValidSession.mockResolvedValue(false);
+    const url = await runLogout();
+    expect(url.startsWith('/login?aviso=')).toBe(true);
+    const { container } = await visit(url);
+    expectLocalCloseUnknown(container);
+  });
+
+  it('ILEGIBLES: cookies() resuelve pero getAll() lanza al renderizar (accion previa borro todo)', async () => {
+    signOut.mockResolvedValue({ error: AUTH_ERROR });
+    const url = await runLogout();
+    h.cookies.mockResolvedValue({
+      getAll: () => {
+        throw new Error('getAll ilegible');
+      },
+    });
+    h.hasValidSession.mockResolvedValue(false);
+    const { container } = await visit(url);
+    expectLocalCloseUnknown(container);
+  });
+
+  it('ILEGIBLES: sin el aviso no hay mensaje ni reintento (formulario de acceso normal)', async () => {
+    h.cookies.mockRejectedValue(new Error('almacen ilegible'));
+    h.hasValidSession.mockResolvedValue(false);
+    await visit('/login');
+    expect(screen.queryByTestId('logout-notice')).toBeNull();
+    expect(screen.queryByTestId('logout-failed-notice')).toBeNull();
+    expect(screen.queryByTestId('logout-retry')).toBeNull();
+    expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
+  });
+
+  it('ILEGIBLES: un reintento con exito (Auth ok y cierre local verificable) vuelve a /login simple', async () => {
+    signOut.mockImplementationOnce(async () => {
+      store.jar.clear();
+      return { error: null };
+    });
+    expect(await runLogout()).toBe('/login');
   });
 });

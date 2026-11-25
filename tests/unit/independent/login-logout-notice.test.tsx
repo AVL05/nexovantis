@@ -2,7 +2,8 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Prueba independiente de Testing (TASK-010 PRE, A02-01 y A02-07). Develop no la modifica.
+// Prueba independiente de Testing (TASK-010 PRE, A02-01 y A02-07; actualizada en TASK-010B/B-02).
+// Develop no la modifica.
 //
 // Contrato de UI de /login (src/app/login/page.tsx, Server Component asincrono con
 // `searchParams: Promise<...>`):
@@ -14,6 +15,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 //   - `next` valido (incluidos parametros codificados) se conserva en el campo oculto del formulario.
 
 vi.mock('@/features/auth/session', () => ({ hasValidSession: vi.fn(async () => false) }));
+// TASK-010B / B-02 (cambio justificado): sin este doble `cookies()` de Next lanza fuera de una
+// solicitud, es decir, el almacen estaba ILEGIBLE y la prueba daba por bueno "se cerro en este
+// navegador" en ese estado (falso positivo del hallazgo 2 de AUDIT-002-RETEST). Aqui el contrato es
+// el de almacen LEGIBLE y SIN cookies de sesion (ausentes); presentes e ilegibles se verifican en
+// login-logout-failed-retest.test.tsx.
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(async () => ({ getAll: () => [{ name: 'theme', value: 'dark' }] })),
+}));
 vi.mock('@/features/auth/actions', () => ({ loginAction: vi.fn(), logoutAction: vi.fn() }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn(() => {

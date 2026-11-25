@@ -6,11 +6,72 @@ import { getSupabaseEnv } from '@/lib/env';
 import type { Database } from './database.types';
 
 /**
+ * Resultado observado de la peticion de revocacion `POST /auth/v1/logout` de UNA solicitud.
+ * `auth-js` descarta los 401/403/404 de la revocacion y devuelve `error: null`, asi que el SDK no
+ * basta para saber si la sesion se revoco: se observa la respuesta HTTP en el transporte.
+ * Solo contiene el estado y el codigo de error de GoTrue (texto corto); nunca cabeceras, cuerpos
+ * de peticion ni tokens. Se crea por solicitud y no se comparte.
+ */
+export type RevocationObserver = {
+  /** Se envio la peticion de revocacion. */
+  requested: boolean;
+  /** Estado HTTP de la respuesta, si llego una. */
+  status: number | null;
+  /** `error_code` (formato heredado) o `code` textual (api-version 2024-01-01) del cuerpo JSON. */
+  code: string | null;
+  /** El transporte lanzo una excepcion (red, DNS, tiempo de espera). */
+  threw: boolean;
+};
+
+function isLogoutRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
+  const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+  if (method !== 'POST') return false;
+  try {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    return new URL(url).pathname.endsWith('/auth/v1/logout');
+  } catch {
+    return false;
+  }
+}
+
+async function readErrorCode(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.clone().json();
+    if (typeof body !== 'object' || body === null) return null;
+    const { error_code: legacy, code } = body as { error_code?: unknown; code?: unknown };
+    if (typeof legacy === 'string') return legacy;
+    return typeof code === 'string' ? code : null;
+  } catch {
+    return null; // cuerpo no JSON o ilegible
+  }
+}
+
+/** `fetch` que delega en el global y, solo para el POST de revocacion, anota estado y codigo. */
+function observingFetch(observer: RevocationObserver): typeof fetch {
+  return async (input, init) => {
+    if (!isLogoutRequest(input, init)) return fetch(input, init);
+    observer.requested = true;
+    let response: Response;
+    try {
+      response = await fetch(input, init);
+    } catch (error) {
+      observer.threw = true;
+      throw error;
+    }
+    observer.status = response.status;
+    if (!response.ok) observer.code = await readErrorCode(response);
+    return response;
+  };
+}
+
+/**
  * Cliente de Supabase para Server Components, Server Actions y Route Handlers. Se crea uno nuevo
  * por solicitud (nunca se comparte entre solicitudes) y usa solo la clave publicable: la
  * identidad y los permisos los aplica RLS con el JWT del usuario.
+ *
+ * `config.revocation` (solo logout) recibe el resultado HTTP de la revocacion remota.
  */
-export async function createClient() {
+export async function createClient(config: { revocation?: RevocationObserver } = {}) {
   const env = getSupabaseEnv();
   const cookieStore = await cookies();
 
@@ -18,6 +79,7 @@ export async function createClient() {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
+      ...(config.revocation ? { global: { fetch: observingFetch(config.revocation) } } : {}),
       cookies: {
         getAll() {
           return cookieStore.getAll();

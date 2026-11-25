@@ -5,7 +5,7 @@ import { BrandMark, BrandName } from '@/components/shell/BrandMark';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { logoutAction } from '@/features/auth/actions';
-import { hasLocalSessionCookies } from '@/features/auth/local-session';
+import { getLocalSessionState } from '@/features/auth/local-session';
 import { safeNextPath } from '@/features/auth/redirect';
 import { DASHBOARD_PATH, LOGOUT_UNCONFIRMED_NOTICE } from '@/features/auth/routes';
 import { hasValidSession } from '@/features/auth/session';
@@ -44,10 +44,16 @@ export default async function LoginPage({
 }: Readonly<{ searchParams: Promise<{ next?: string | string[]; aviso?: string | string[] }> }>) {
   const { next, aviso } = await searchParams;
   const logoutUnconfirmed = aviso === LOGOUT_UNCONFIRMED_NOTICE;
-  // Doble fallo al cerrar sesion (Auth y borrado local): la sesion sigue viva en este navegador.
-  // No se redirige al panel: se avisa de que NO se cerro y se ofrece reintentar.
-  const sessionStillOpen = logoutUnconfirmed && (await hasLocalSessionCookies());
-  if (!sessionStillOpen && (await hasValidSession())) redirect(DASHBOARD_PATH);
+  // Con el aviso se distingue el estado de las cookies de sesion de este navegador:
+  // - presentes (doble fallo: Auth y borrado local): la sesion sigue viva; se avisa y se reintenta.
+  // - ilegibles: no se puede afirmar ni negar el cierre local; se avisa de la incertidumbre y se
+  //   ofrece reintentar (nunca se afirma que la sesion se cerro).
+  // - ausentes: el cierre local se logro; aviso habitual.
+  const localState = logoutUnconfirmed ? await getLocalSessionState() : 'absent';
+  const sessionStillOpen = localState === 'present';
+  const localUnknown = localState === 'unreadable';
+  if (!sessionStillOpen && !localUnknown && (await hasValidSession())) redirect(DASHBOARD_PATH);
+  const retryAvailable = sessionStillOpen || localUnknown;
 
   return (
     <main className="grid min-h-dvh overflow-x-clip md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
@@ -80,12 +86,14 @@ export default async function LoginPage({
           <div className="flex w-full max-w-sm flex-col gap-8">
             <div className="flex flex-col gap-2">
               <h1 className="text-3xl font-semibold tracking-tight">
-                {sessionStillOpen ? 'Sesión sin cerrar' : 'Iniciar sesión'}
+                {retryAvailable ? 'Sesión sin cerrar' : 'Iniciar sesión'}
               </h1>
               <p className="text-base text-ink-muted">
                 {sessionStillOpen
                   ? 'Tu cuenta sigue abierta en este navegador.'
-                  : 'Accede con la cuenta de tu organización.'}
+                  : localUnknown
+                    ? 'No podemos confirmar si tu cuenta sigue abierta en este navegador.'
+                    : 'Accede con la cuenta de tu organización.'}
               </p>
             </div>
             {sessionStillOpen ? (
@@ -98,6 +106,16 @@ export default async function LoginPage({
                 continúa, cierra el navegador y avisa a quien administra tu organización, sobre todo
                 si usas un equipo compartido.
               </Alert>
+            ) : localUnknown ? (
+              <Alert
+                tone="danger"
+                title="No se pudo confirmar el cierre de tu sesión"
+                data-testid="logout-unknown-notice"
+              >
+                No se pudo comprobar si tu sesión sigue abierta en este navegador. Inténtalo de
+                nuevo; si el problema continúa, cierra el navegador y avisa a quien administra tu
+                organización, sobre todo si usas un equipo compartido.
+              </Alert>
             ) : logoutUnconfirmed ? (
               <Alert
                 tone="warning"
@@ -109,7 +127,7 @@ export default async function LoginPage({
                 un acceso ajeno, avisa a quien administra tu organización.
               </Alert>
             ) : null}
-            {sessionStillOpen ? (
+            {retryAvailable ? (
               <form action={logoutAction}>
                 <Button type="submit" size="lg" className="w-full" data-testid="logout-retry">
                   Reintentar cierre de sesión
