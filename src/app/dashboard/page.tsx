@@ -7,6 +7,7 @@ import { listRecentActivity } from '@/features/activity/service';
 import { LogoutButton } from '@/features/auth/LogoutButton';
 import { requireMembership } from '@/features/auth/session';
 import { customerService } from '@/features/customers/service';
+import { inventoryService } from '@/features/inventory/service';
 import { NAV_ITEMS } from '@/features/navigation/items';
 import { technicianService } from '@/features/technicians/service';
 import { workOrderService } from '@/features/work-orders/service';
@@ -32,20 +33,22 @@ async function loadDashboard(organizationId: string, userId: string) {
   try {
     const supabase = await createClient();
     const ctx = { supabase, organizationId, userId };
-    const [customers, technicians, orders, activity] = await Promise.all([
+    const [customers, technicians, orders, activity, inventory] = await Promise.all([
       customerService.countActive(ctx),
       technicianService.countActive(ctx),
       workOrderService.dashboard(ctx, todayInMadrid()),
       listRecentActivity(ctx, 10),
+      inventoryService.alertCounts(ctx),
     ]);
     return {
       customers: customers.ok ? customers.data : null,
       technicians: technicians.ok ? technicians.data : null,
       orders: orders.ok ? orders.data : null,
       activity: activity.ok ? activity.data : null,
+      inventory: inventory.ok ? inventory.data : null,
     };
   } catch {
-    return { customers: null, technicians: null, orders: null, activity: null };
+    return { customers: null, technicians: null, orders: null, activity: null, inventory: null };
   }
 }
 
@@ -101,6 +104,13 @@ export default async function DashboardPage() {
       description: 'Órdenes abiertas',
       testId: 'count-orders',
       value: data.orders ? data.orders.open : null,
+    },
+    {
+      title: 'Inventario',
+      href: '/inventory',
+      description: 'Artículos con stock bajo o agotados',
+      testId: 'count-inventory',
+      value: data.inventory ? data.inventory.low + data.inventory.out : null,
     },
   ];
 

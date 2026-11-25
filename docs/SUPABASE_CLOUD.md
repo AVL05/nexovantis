@@ -111,3 +111,7 @@ Cinco migraciones nuevas, posteriores a `20261124100000`: `20261125090000_task01
 ### Comprobaciones aplazadas (stack local de Supabase en CI y, tras la autorización, Cloud)
 
 Sin ejecutar: `pnpm test:supabase` (`logout-revocation`, `name-constraints`, `archived-readonly`, `archive-restore`, `rls`) y `pnpm test:e2e:supabase` (`task010-ui`, `crm`) con Auth y PostgREST reales; la caracterización de la sesión copiada cuando falla la revocación remota (A02-01) solo se comprueba allí. Tras aplicar en Cloud, en solo lectura: restricciones `*_name_length` con la definición nueva, columna `activity_events.seq` (bigint, única, sin INSERT/UPDATE para `anon` y `authenticated`), restricción `activity_events_seq_required` (`convalidated = false`), triggers `*_prevent_unarchive` con `WHEN (old.archived_at is not null or new.archived_at is not null)` y `private.demo_fixture_identity` sin privilegios para `anon` y `authenticated`; los avisos de seguridad de Supabase deben seguir en 0.
+
+## Migración de TASK-013 (F6, inventario y actividad): preparada, NO aplicada en Cloud
+
+`20261128090000_task013_inventory` (tablas `inventory_items`, `stock_movements` e `inventory_event_details`, RPC de inventario y ampliación de los CHECK de `activity_events` y de `private.demo_fixture_identity`) no se ha aplicado en Cloud ni se ha ejecutado `supabase/seeds/demo-inventory.sql`. Su aplicación requiere autorización humana expresa y, como el resto, por el conector `apply_migration` y alineando después el historial.

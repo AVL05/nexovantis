@@ -1,7 +1,7 @@
 // Única fuente de verdad de la navegación autenticada.
 // Para activar un módulo: asigna su `href` real (la ruta debe existir) y quita `soon`.
 
-export type NavIcon = 'home' | 'users' | 'wrench' | 'clipboard' | 'receipt';
+export type NavIcon = 'home' | 'users' | 'wrench' | 'clipboard' | 'receipt' | 'box' | 'history';
 
 export type NavItem = {
   key: string;
@@ -17,4 +17,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'technicians', label: 'Técnicos', icon: 'wrench', href: '/technicians' },
   { key: 'orders', label: 'Órdenes', icon: 'clipboard', href: '/orders' },
   { key: 'quotes', label: 'Presupuestos', icon: 'receipt', href: '/quotes' },
+  { key: 'inventory', label: 'Inventario', icon: 'box', href: '/inventory' },
+  { key: 'activity', label: 'Actividad', icon: 'history', href: '/activity' },
 ];

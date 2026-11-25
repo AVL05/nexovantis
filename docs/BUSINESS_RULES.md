@@ -62,3 +62,16 @@ Implementadas en TASK-011 ([registro](reviews/claude/TASK-011.md)).
 DH-13 lo detectó Develop en TASK-002; no figuraba en la lista de criterios de la fase PRE. El Orchestrator la adoptó como decisión humana formal pendiente (registro: docs/reviews/claude/TASK-002.md); su fase de resolución es antes de F4 (docs/ROADMAP.md).
 
 Precisión de BR08 sin cambio de semántica: "identidad, fecha y entidad" se concreta como identidad del actor, fecha y hora, y tipo e id de la entidad; el evento se guarda de forma consistente con el cambio de negocio (BR03). Los campos adicionales (organización, acción, valores anterior y nuevo) y la inmutabilidad para los usuarios son criterios de prueba propuestos, no aprobados, y forman parte de DH-08 (TC-EVT en docs/TESTING_GUIDELINES.md).
+
+**Aprobadas (2026-11-25, decisión humana al iniciar F6, TASK-013):** INV-1 a INV-9 y la ampliación ACTIVITY P1 de DH-08. No cambian ninguna BR: concretan BR07 (inventario, P1) y BR08.
+- INV-1: cantidades enteras; la unidad es una etiqueta de lista cerrada (`ud`, `m`, `kg`, `l`, `caja`).
+- INV-2: la referencia es única por organización sin distinguir mayúsculas y no cambia tras el alta; nombre, descripción, unidad y umbral de stock bajo son editables.
+- INV-3: el artículo nace con saldo 0; la existencia inicial es una entrada; el saldo no se edita directamente, solo cambia por movimientos.
+- INV-4: movimientos de entrada, salida y consumo con cantidad > 0 y nota opcional de hasta 200 caracteres; sin anulaciones ni borrados (la corrección es un movimiento contrario). El saldo nunca es negativo, tampoco con concurrencia real (bloqueo de fila y CHECK en la base).
+- INV-5: idempotencia: clave UUID por envío, única por organización; el reintento con el mismo contenido devuelve el movimiento original sin duplicar; la misma clave con contenido distinto se rechaza.
+- INV-6: el consumo solo se imputa a órdenes de la misma organización en estado no terminal (pendiente, asignada, en curso); consumo, movimiento y evento se guardan en la misma transacción.
+- INV-7: agotado = saldo 0; bajo = saldo > 0 y <= umbral; umbral 0 desactiva "bajo".
+- INV-8: archivar se permite con cualquier saldo; un artículo archivado es de solo lectura y no admite movimientos (también frente a llamadas directas); es restaurable; el historial se conserva; archivar y restaurar generan evento.
+- INV-9: `owner` y `member` pueden crear, editar y mover stock (como el CRM).
+- DH-08, ACTIVITY P1: eventos `inventory_item` `created`, `archived`, `restored`, `stock_in`, `stock_out` y `stock_consumed` con detalle estructurado (cantidad, saldo anterior y nuevo, orden vinculada; sin la nota libre), actor siempre `auth.uid()` y nunca nulo. La aceptación y el rechazo de presupuesto ya los emite F5. Pantalla `/activity` de solo lectura para ambos roles.
+Implementadas en TASK-013 (migración `20261128090000_task013_inventory.sql`; ver [ARCHITECTURE.md](ARCHITECTURE.md)).
