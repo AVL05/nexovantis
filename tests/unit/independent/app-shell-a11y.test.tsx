@@ -55,7 +55,9 @@ describe('AppShell', () => {
   // TASK-011 (POST): el alcance aprobado de F4 activa /orders en la navegacion. Actualizacion
   // aprobada por Testing (propietario de esta prueba): antes "Ordenes sin enlace" (TASK-008B).
   // TASK-012 (POST): el alcance aprobado de F5 anade /quotes (Presupuestos) como quinta entrada.
-  it('navegacion: Panel, Clientes, Tecnicos, Ordenes y Presupuestos enlazados (TASK-011/012); aria-current en la actual', () => {
+  // TASK-013 (POST): F6 anade /inventory (Inventario) y /activity (Actividad) como sexta y septima entradas
+  // (enlaces autorizados por Orchestrator; cambio legitimo de la lista exacta, sin relajar aserciones).
+  it('navegacion: Panel, Clientes, Tecnicos, Ordenes y Presupuestos, Inventario y Actividad enlazados (TASK-011/012/013); aria-current en la actual', () => {
     shell();
     const nav = screen.getByRole('navigation');
     const links = within(nav).getAllByRole('link');
@@ -65,6 +67,8 @@ describe('AppShell', () => {
       '/technicians',
       '/orders',
       '/quotes',
+      '/inventory',
+      '/activity',
     ]);
     expect(links[0]).toHaveAttribute('aria-current', 'page');
     for (const link of links.slice(1)) expect(link).not.toHaveAttribute('aria-current');
@@ -76,6 +80,8 @@ describe('AppShell', () => {
       '/technicians',
       '/orders',
       '/quotes',
+      '/inventory',
+      '/activity',
     ]);
   });
 

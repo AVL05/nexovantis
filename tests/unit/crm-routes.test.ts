@@ -23,6 +23,13 @@ describe('rutas de Clientes y Tecnicos', () => {
     '/Quotes/aaaa',
     '/%71uotes',
     '//quotes/',
+    '/inventory',
+    '/inventory/new',
+    '/Inventory/aaaa/edit',
+    '//inventory/',
+    '/activity',
+    '/Activity',
+    '/%61ctivity',
   ])('protege %s', (path) => {
     expect(isProtectedPath(path)).toBe(true);
   });
@@ -36,6 +43,9 @@ describe('rutas de Clientes y Tecnicos', () => {
     '/ordersx',
     '/quote',
     '/quotesx',
+    '/inventoryx',
+    '/activityx',
+    '/api/inventory',
   ])('no protege %s', (path) => {
     expect(isProtectedPath(path)).toBe(false);
   });
@@ -47,5 +57,13 @@ describe('navegacion', () => {
     expect(byKey.customers).toBe('/customers');
     expect(byKey.technicians).toBe('/technicians');
     expect(byKey.orders).toBe('/orders');
+  });
+});
+
+describe('navegacion de inventario y actividad (TASK-013)', () => {
+  it('Inventario y Actividad enlazan a su modulo', () => {
+    const byKey = Object.fromEntries(NAV_ITEMS.map((item) => [item.key, item]));
+    expect(byKey.inventory).toMatchObject({ label: 'Inventario', href: '/inventory' });
+    expect(byKey.activity).toMatchObject({ label: 'Actividad', href: '/activity' });
   });
 });

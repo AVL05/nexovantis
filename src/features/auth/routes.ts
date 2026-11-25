@@ -17,6 +17,8 @@ export const CUSTOMERS_PATH = '/customers';
 export const TECHNICIANS_PATH = '/technicians';
 export const ORDERS_PATH = '/orders';
 export const QUOTES_PATH = '/quotes';
+export const INVENTORY_PATH = '/inventory';
+export const ACTIVITY_PATH = '/activity';
 
 const PROTECTED_PREFIXES = [
   DASHBOARD_PATH,
@@ -24,6 +26,8 @@ const PROTECTED_PREFIXES = [
   TECHNICIANS_PATH,
   ORDERS_PATH,
   QUOTES_PATH,
+  INVENTORY_PATH,
+  ACTIVITY_PATH,
 ];
 
 /** Normaliza una ruta para decidir si es protegida: decodifica, une barras y pasa a minusculas. */

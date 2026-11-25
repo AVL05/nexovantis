@@ -5,7 +5,7 @@ import { cn } from '@/components/ui/cn';
 export type ShellNavItem = {
   key: string;
   label: string;
-  icon: 'home' | 'users' | 'wrench' | 'clipboard' | 'receipt';
+  icon: 'home' | 'users' | 'wrench' | 'clipboard' | 'receipt' | 'box' | 'history';
   href: string | null;
 };
 
@@ -16,6 +16,8 @@ const ICONS: Record<ShellNavItem['icon'], string> = {
   wrench: 'M14.5 6.5a4 4 0 0 0 5 5L10 21a2.1 2.1 0 0 1-3-3l9.5-9.5a4 4 0 0 0-2-2.1z',
   clipboard: 'M9 4h6v3H9zM7 5.5H5.5V20h13V5.5H17M9 12h6M9 16h4',
   receipt: 'M6 3.5h12V21l-3-1.8-3 1.8-3-1.8L6 21zM9 8h6M9 12h6M9 16h3',
+  box: 'M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4zM3.5 7.5 12 11.5l8.5-4M12 11.5v9',
+  history: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4M12 8v4.5l3 1.8',
 };
 
 function Icon({ name }: Readonly<{ name: ShellNavItem['icon'] }>) {

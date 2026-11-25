@@ -300,6 +300,7 @@ describe('aislamiento entre organizaciones (RLS) y referencias cruzadas', () => 
       ),
       'NX010', // el trigger del concepto no encuentra el presupuesto en esa organizacion
     );
+    await addItem(s.ownerA, quote); // con concepto: el rechazo viene de la orden, no de NX016
     // Orden de otra organizacion enlazada a un presupuesto de A
     const orderB = String(
       (

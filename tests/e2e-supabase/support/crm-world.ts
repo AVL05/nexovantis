@@ -31,7 +31,7 @@ function must<T>(result: { data: T | null; error: { message: string } | null }, 
   return result.data;
 }
 
-async function buildWorld(): Promise<CrmWorld> {
+async function buildWorld(key: string): Promise<CrmWorld> {
   const { url, serviceKey } = requireLocalSupabaseEnv();
   const admin: SupabaseClient = createClient(url, serviceKey, authOptions);
   const run = randomUUID().slice(0, 8);
@@ -39,7 +39,7 @@ async function buildWorld(): Promise<CrmWorld> {
   const orgs = must(
     await admin
       .from('organizations')
-      .insert([{ name: `CRM Alfa ${run}` }, { name: `CRM Beta ${run}` }])
+      .insert([{ name: `CRM Alfa ${key} ${run}` }, { name: `CRM Beta ${key} ${run}` }])
       .select('id, name')
       .order('name'),
     'crear organizaciones',
@@ -51,7 +51,7 @@ async function buildWorld(): Promise<CrmWorld> {
     org: Org,
     role: 'owner' | 'member',
   ): Promise<CrmUser> => {
-    const email = `crm-${label}-${run}-${randomBytes(3).toString('hex')}@example.test`;
+    const email = `${key}-${label}-${run}-${randomBytes(3).toString('hex')}@example.test`;
     const password = randomBytes(24).toString('base64url');
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
     const user = created.data.user;
@@ -78,11 +78,21 @@ async function buildWorld(): Promise<CrmWorld> {
   };
 }
 
-let worldPromise: Promise<CrmWorld> | undefined;
-/** Un mundo por proceso worker (memoizado). */
-export function getCrmWorld(): Promise<CrmWorld> {
-  worldPromise ??= buildWorld();
-  return worldPromise;
+const worlds = new Map<string, Promise<CrmWorld>>();
+/**
+ * Un mundo (2 organizaciones y 3 usuarios) por clave y por proceso worker (memoizado). Cada spec
+ * pasa su propia clave ('orders', 'quotes', 'inventory', 'activity'): asi sus datos, sus
+ * listados y sus indicadores no colisionan con los de otro spec. Sin clave se usa 'crm'
+ * (crm.spec.ts, comportamiento previo).
+ */
+export function getCrmWorld(key = 'crm'): Promise<CrmWorld> {
+  if (!/^[a-z][a-z0-9-]{0,15}$/.test(key)) throw new Error(`Clave de mundo invalida: ${key}`);
+  let world = worlds.get(key);
+  if (!world) {
+    world = buildWorld(key);
+    worlds.set(key, world);
+  }
+  return world;
 }
 
 /** Inicio de sesion por la interfaz (Server Action real contra Auth local). */

@@ -9,8 +9,13 @@ import { getCrmWorld, loginAs, type CrmWorld } from './support/crm-world';
 test.describe.configure({ mode: 'serial' });
 
 let world: CrmWorld;
+// Clave propia de este escenario: world.run lo comparten inventory/activity/quotes (misma
+// organizacion), asi que las busquedas del listado usan este prefijo, presente solo en los
+// titulos de las ordenes que crea este spec.
+let scenario: string;
 test.beforeAll(async () => {
-  world = await getCrmWorld();
+  world = await getCrmWorld('orders');
+  scenario = `OS${world.run}`;
 });
 
 async function createPerson(page: Page, path: '/customers' | '/technicians', name: string) {
@@ -40,6 +45,20 @@ async function createOrder(
   return page.url().split('/').pop()!.split('?')[0];
 }
 
+// La consulta del listado ya se pinto (tabla/lista o estado vacio): condicion previa de toda
+// comprobacion de ausencia en /orders (evita un falso positivo anterior al render).
+const listSettled = (page: Page) =>
+  expect(
+    page
+      .getByRole('region', { name: 'Listado de órdenes de servicio' })
+      .or(page.getByRole('list', { name: 'Listado de órdenes de servicio' }))
+      .or(
+        page.getByRole('heading', {
+          name: /^(No hay órdenes que coincidan|Todavía no hay órdenes de servicio)$/,
+        }),
+      ),
+  ).toBeVisible();
+
 const statusOf = (page: Page, text: string) =>
   expect(page.locator('header').getByText(text, { exact: true })).toBeVisible();
 
@@ -48,7 +67,7 @@ test('flujo demo: cliente, orden, asignar, iniciar, completar, historial y panel
 }) => {
   const customer = `Cliente Orden ${world.run}`;
   const technician = `Técnico Orden ${world.run}`;
-  const title = `Revisión caldera ${world.run}`;
+  const title = `Revisión caldera ${scenario}`;
   await loginAs(page, world.ownerA);
   await createPerson(page, '/customers', customer);
   await createPerson(page, '/technicians', technician);
@@ -86,13 +105,41 @@ test('flujo demo: cliente, orden, asignar, iniciar, completar, historial y panel
   await expect(history.getByText(/Técnico asignado a/)).toBeVisible();
   await expect(history.getByText('Estado: En curso')).toBeVisible();
   await expect(history.getByText('Estado: Completada')).toBeVisible();
-  await expect(history.getByText(/Tú/).first()).toBeVisible();
+  // Actor identificado ("Tú" visible) en CADA una de las entradas comprobadas.
+  for (const text of [
+    'Orden creada',
+    /Técnico asignado a/,
+    'Estado: En curso',
+    'Estado: Completada',
+  ]) {
+    const entry = history.getByRole('listitem').filter({ hasText: text });
+    await expect(entry).toHaveCount(1);
+    await expect(entry.getByText(/(^|\s)Tú$/)).toBeVisible();
+  }
 
   // Panel: indicadores derivados de datos reales y actividad reciente.
   await page.goto('/dashboard');
   await expect(page.getByTestId('orders-completed')).toHaveText(/^[1-9]\d*$/);
   await expect(page.getByTestId('orders-open')).toHaveText(/^\d+$/);
-  await expect(page.getByRole('link', { name: title }).first()).toBeVisible();
+  // La orden (completada: ya no esta entre las pendientes) aparece en "Actividad reciente" con un
+  // enlace VISIBLE a su ficha en cada uno de sus eventos recientes y con el actor identificado.
+  const recent = page.locator('section[aria-labelledby="actividad"]');
+  const ownEvents = recent
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('link', { name: title, exact: true }) });
+  const created = ownEvents.filter({ hasText: 'Orden creada' });
+  await expect(created).toHaveCount(1);
+  await expect(created.getByRole('link', { name: title, exact: true })).toBeVisible();
+  await expect(created.getByRole('link', { name: title, exact: true })).toHaveAttribute(
+    'href',
+    `/orders/${id}`,
+  );
+  const changes = ownEvents.filter({ hasText: 'Cambio de estado' });
+  await expect(changes).not.toHaveCount(0); // iniciar y completar
+  for (const entry of await changes.all()) {
+    await expect(entry).toBeVisible();
+    await expect(entry.getByText(/(^|\s)Tú$/)).toBeVisible();
+  }
   await page.getByRole('link', { name: 'Nueva orden' }).first().click();
   await expect(page).toHaveURL(/\/orders\/new$/);
 });
@@ -101,14 +148,13 @@ test('listado: busqueda, filtros por estado y tecnico, estado vacio y persistenc
   page,
 }) => {
   await loginAs(page, world.memberA);
-  await page.goto(`/orders?q=${encodeURIComponent(world.run)}`);
-  await expect(
-    page.getByRole('table').getByRole('link', { name: new RegExp(world.run) }),
-  ).toBeVisible();
+  await page.goto(`/orders?q=${encodeURIComponent(scenario)}`);
+  const flowTitle = `Revisión caldera ${scenario}`;
+  await expect(page.getByRole('table').getByRole('link', { name: flowTitle })).toBeVisible();
 
-  await page.goto(`/orders?q=${encodeURIComponent(world.run)}&estado=completed`);
+  await page.goto(`/orders?q=${encodeURIComponent(scenario)}&estado=completed`);
   await expect(page.getByRole('table').getByText('Completada')).toBeVisible();
-  await page.goto(`/orders?q=${encodeURIComponent(world.run)}&estado=cancelled`);
+  await page.goto(`/orders?q=${encodeURIComponent(scenario)}&estado=cancelled`);
   await expect(page.getByRole('heading', { name: 'No hay órdenes que coincidan' })).toBeVisible();
 
   // Termino hostil: no rompe la consulta.
@@ -129,7 +175,7 @@ test('cancelar con motivo, DH-04 al archivar y aislamiento entre organizaciones'
 }) => {
   const customer = `Cliente Cancel ${world.run}`;
   const technician = `Técnico Cancel ${world.run}`;
-  const title = `Orden a cancelar ${world.run}`;
+  const title = `Orden a cancelar ${scenario}`;
   await loginAs(page, world.ownerA);
   const customerId = await createPerson(page, '/customers', customer);
   const technicianId = await createPerson(page, '/technicians', technician);
@@ -168,5 +214,6 @@ test('cancelar con motivo, DH-04 al archivar y aislamiento entre organizaciones'
   await page.goto(`/orders/${id}`);
   await expect(page.getByRole('heading', { name: 'Orden no encontrada' })).toBeVisible();
   await page.goto('/orders');
+  await listSettled(page);
   await expect(page.getByText(title)).toHaveCount(0);
 });
