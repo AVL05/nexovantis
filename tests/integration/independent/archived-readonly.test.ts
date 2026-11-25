@@ -279,7 +279,11 @@ describe('A02-06 no regresion de la proteccion de archived_at', () => {
     const id = await archivedRow('customers', 'name');
     expect(
       await code(() =>
-        asUser(s.ownerA, `update public.customers set archived_at = now() where id = $1`, [id]),
+        asUser(
+          s.ownerA,
+          `update public.customers set archived_at = archived_at + interval '1 day' where id = $1`,
+          [id],
+        ),
       ),
     ).toBe('23000');
     expect(

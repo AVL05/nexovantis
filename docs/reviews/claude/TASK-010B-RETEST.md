@@ -33,3 +33,5 @@ Ninguno confirmado. Informational: (I-1) la clasificación `session-absent` depe
 
 ## Veredicto
 **PASS** sobre lo ejecutable en local; sin defectos confirmados. BLOCKED global por CI (supabase/E2E con Auth real sobre el nuevo SHA) se mantiene aparte.
+
+- Correccion CI 45586882982 (archived-readonly.test.ts, A02-06): defecto de la prueba, no de la implementacion; `set archived_at = now()` podia coincidir con el archived_at almacenado (sin cambio real, el trigger no actua). Ahora usa `archived_at + interval '1 day'`; 23 passed, exit 0, prettier OK.

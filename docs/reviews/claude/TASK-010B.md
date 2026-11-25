@@ -34,5 +34,9 @@ Antes y después de cada delegación: HEAD `33e6b1c`, sin staging, ignorados sen
 
 Checks locales (RETEST): format, lint, typecheck, build exit 0; unit 691/691; integración PGlite 557/557.
 
+## CI y cierre de la prueba
+- CI 45586882982 sobre `3375fe8`: `supabase` **PASS** (193/193 integración, 61/61 E2E con Auth real); `quality` falló solo en `archived-readonly.test.ts:278`. Testing confirmó un defecto de la prueba (`archived_at = now()` podía coincidir con el valor almacenado, sin cambio real; el trigger acertaba al no dispararse) y la corrigió con `archived_at + interval '1 day'`, manteniendo la expectativa 23000. Archivo afectado: 23/23, exit 0. Develop no intervino (sin defecto de implementación).
+- I-1 e I-2 aceptados por el humano (2026-11-25) como Informational.
+
 ## Estado
-**BLOCKED** hasta CI sobre el nuevo SHA. G2 abierta hasta reauditoría de Codex. Cloud sin cambios: cinco migraciones nuevas pendientes de aplicación autorizada.
+**BLOCKED** hasta CI verde en ambos jobs sobre el nuevo SHA. G2 abierta hasta reauditoría de Codex. Cloud sin cambios: cinco migraciones nuevas pendientes de aplicación autorizada.
