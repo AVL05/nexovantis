@@ -1,5 +1,13 @@
 # Estado del proyecto
 
+## Resumen vigente — 2026-11-25
+- F0–F3 cerradas; G1 por DH-G1 (AUDIT-001 FAIL histórico), G2 por decisión humana tras AUDIT-002-RETEST-3 PASS sobre `7eb5ca3`, CI 45591123196 verde y Cloud verificado. Cierre documental `400d80a`.
+- Cloud: 10/10 migraciones, 37 clientes, 12 técnicos, 8 eventos históricos con seq NULL y 49 identidades reconciliadas; seed idempotente. No reabrir F3 sin regresión material.
+- Próximo módulo: F4 órdenes de servicio y dashboard P0. Resolver DH-01/02/03/07/08/13 antes de implementar; aplicar DH-04/05 aprobadas. Consultar BUSINESS_RULES y requisitos F4. F5–F6 P1 tras P0; F7 pulido; F8 despliegue.
+- Flujo orientado a entrega: Sonnet medium, Develop → Testing POST por módulo, PRE excepcional, checks dirigidos y regresión CI. Mantener controles y puertas.
+- Pendientes globales: accesibilidad y pulido F7, despliegue público F8. Actualizar este resumen al cierre de cada módulo. No leer el historial inferior salvo necesidad.
+
+## Historial de evidencia (F0–F3; pendientes históricos no describen el estado vigente)
 Fecha: 2026-11-25. F0, F1 y F2 integradas en `main` con el merge commit `c4c3bdf` de la Pull Request #1 (sin squash; registro en [TASK-005](reviews/claude/TASK-005.md)). Rama de trabajo actual: `feat/supabase-auth`, creada desde `main` en `c4c3bdf`. `chore/project-foundation` se conserva como referencia histórica.
 
 - F0: completada. Herramientas locales verificadas por el usuario (Node 24.22.2, pnpm 12.16.1, Git 2.56, gh 2.103.3 autenticado, Codex 0.166.0). Claude Code 2.1.327 verificado con `claude --version` por Orchestrator (TASK-001); 2.1.331 tras el reinicio de TASK-002-RUNTIME. Repositorio privado creado. Entorno de trabajo elegido por el humano: Claude Code Desktop.

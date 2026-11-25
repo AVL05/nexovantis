@@ -6,21 +6,19 @@
 | F1 | Contrato, arquitectura, agentes y delegación real | G1: Testing + Codex Sol alto + humano |
 | F2 | Scaffold, scripts, CI, layout | Build/CI inicial y Testing |
 | F3 | Auth, RLS, seed, clientes/técnicos | G2: pruebas cruzadas + Codex Astra muy alto |
-| F4 | Órdenes, estados y dashboard | G3: P0 completo + Codex Sol alto |
+| F4 | Órdenes, estados y dashboard | G3: P0 completo + Codex focalizado en órdenes/RLS/transacciones |
 | F5 | Presupuestos transaccionales | Testing y concurrencia |
-| F6 | Inventario y actividad | G4: Testing + Codex Astra muy alto si P1 |
+| F6 | Inventario y actividad | G4: Testing + Codex focalizado en concurrencia/idempotencia si P1 |
 | F7 | Pulido, accesibilidad y regresión | Testing y aceptación humana |
-| F8 | Deploy público y entrega | G5: Astra muy alto, incógnito y aceptación humana |
+| F8 | Deploy público y entrega | G5: revisión final de Codex, incógnito y aceptación humana |
 
-Una fase a la vez. P1/P2 no comprometen P0. No avanzar con FAIL/BLOCKED. Ramas pequeñas y commits descriptivos, sin force push. Revisar diff y evidencia antes de integrar. Actualizar STATUS.md con resultados reales.
+Un módulo completo por fase. Priorizar P0 funcional y desplegable. P1/P2 no comprometen P0 ni la entrega; el humano decide reducir alcance opcional si amenaza la entrega. No aprobar un criterio o puerta con FAIL/BLOCKED. Ramas pequeñas y commits descriptivos, sin force push. Revisar diff y evidencia antes de integrar. Actualizar STATUS.md con resultados reales.
 
-## Estado actual (2026-11-24)
-F0 completada. F1: G1 cerrado por decisión humana explícita DH-G1 (2026-11-24, [TASK-003.md](reviews/claude/TASK-003.md)); no es un PASS de Testing ni una aprobación de Codex, y AUDIT-001 conserva su FAIL. F2 autorizada por el humano, condicionada al cierre documental de F1. F3 a F8 pendientes. El detalle y la evidencia están en [STATUS.md](STATUS.md). No se cambian fases, alcance ni puertas.
-
-Las validaciones de la CLI (`/permissions`, `/status`, `/mcp`, `/context`, `/tasks` y reinicio) son complementarias, opcionales, solo de terminal o no documentadas en Desktop; ninguna es prerrequisito de G1 (DH-G1). Equivalentes en Desktop y límites en [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md).
+## Estado actual (2026-11-25)
+F0–F3 cerradas. G1 por decisión humana DH-G1, no es PASS de Codex; AUDIT-001 conserva FAIL y riesgos aceptados. G2 cerrada tras AUDIT-002-RETEST-3 PASS, CI 45591123196 y Cloud verificado. Próximo módulo F4 (órdenes y dashboard P0). STATUS.md contiene la evidencia. Se conservan fases, criterios y puertas. Las comprobaciones CLI de F1 son complementarias, no prerrequisitos reabiertos.
 
 ## Registro de pendientes por fase
-Todo lo siguiente está pendiente y no implementado. Los nombres de tareas futuras son propuestas; el ID definitivo lo asigna Orchestrator. Las decisiones de semántica de negocio (DH-01..DH-08 y DH-13) están en [BUSINESS_RULES.md](BUSINESS_RULES.md).
+Registro histórico de decisiones y pendientes por fase: F1–F3 cerradas; no reabrir tareas resueltas. Comprobaciones pendientes F4–F8 vigentes. Los nombres de tareas futuras son propuestas; el ID definitivo lo asigna Orchestrator. Las decisiones de semántica de negocio (DH-01..DH-08 y DH-13) están en [BUSINESS_RULES.md](BUSINESS_RULES.md).
 
 ### F1: riesgo residual aceptado por el humano (DH-G1), no verificado
 - Aceptado por el humano, no verificado ni resuelto: validaciones de la CLI y reinicio (`/permissions`, `/status`, `/mcp`, `/context`, `/tasks`, `claude doctor`; complementarias, solo de terminal o no documentadas en Desktop); carga de develop.md tras el reinicio con una invocación trivial; prueba de que las reglas `ask` muestran su diálogo (POST-03, cancelada); DH-12 no ratificada (POST-02).
