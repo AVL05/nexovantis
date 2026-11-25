@@ -54,7 +54,8 @@ describe('AppShell', () => {
 
   // TASK-011 (POST): el alcance aprobado de F4 activa /orders en la navegacion. Actualizacion
   // aprobada por Testing (propietario de esta prueba): antes "Ordenes sin enlace" (TASK-008B).
-  it('navegacion: Panel, Clientes, Tecnicos y Ordenes enlazados (TASK-011); aria-current en la actual', () => {
+  // TASK-012 (POST): el alcance aprobado de F5 anade /quotes (Presupuestos) como quinta entrada.
+  it('navegacion: Panel, Clientes, Tecnicos, Ordenes y Presupuestos enlazados (TASK-011/012); aria-current en la actual', () => {
     shell();
     const nav = screen.getByRole('navigation');
     const links = within(nav).getAllByRole('link');
@@ -63,15 +64,18 @@ describe('AppShell', () => {
       '/customers',
       '/technicians',
       '/orders',
+      '/quotes',
     ]);
     expect(links[0]).toHaveAttribute('aria-current', 'page');
     for (const link of links.slice(1)) expect(link).not.toHaveAttribute('aria-current');
     expect(within(nav).getByText('Órdenes').closest('a')).toHaveAttribute('href', '/orders');
+    expect(within(nav).getByText('Presupuestos').closest('a')).toHaveAttribute('href', '/quotes');
     expect(NAV_ITEMS.filter((i) => i.href).map((i) => i.href)).toEqual([
       '/dashboard',
       '/customers',
       '/technicians',
       '/orders',
+      '/quotes',
     ]);
   });
 

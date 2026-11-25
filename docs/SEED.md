@@ -112,3 +112,22 @@ from public.work_orders w join public.organizations o on o.id = w.organization_i
 where o.name in ('Demo Norte', 'Demo Sur')
 group by o.name, w.status order by o.name, w.status;
 ```
+
+## Presupuestos demo (TASK-012, F5)
+
+`supabase/seeds/demo-quotes.sql` crea presupuestos **ficticios** (descripciones con el prefijo `[DEMO]`, importes en céntimos enteros) para `Demo Norte` y `Demo Sur`. **No se ha ejecutado en Cloud** ni en ningún entorno persistente: solo está verificado en PGlite (`tests/integration/quotes-seed.test.ts`). Ejecutarlo en Cloud requiere decisión humana expresa.
+
+- **Requisitos**: migración `20261127090000_task012_quotes` aplicada y `demo-crm.sql` ejecutado antes (los presupuestos enlazan clientes demo por su identidad estable). No depende de `demo-orders.sql` (puede ejecutarse antes o después). Mismas precondiciones de organización y `owner` único que `demo-crm.sql`; si no se cumplen, aborta sin cambiar nada.
+- **Qué crea**: Demo Norte 8 presupuestos (3 borrador, 3 aceptados, 2 rechazados) y Demo Sur 3 (1 / 1 / 1), con 2 a 3 conceptos cada uno y tipos de IVA 21 %, 10 % y 0 %. Cada presupuesto aceptado lleva **su orden de servicio** (pendiente, mismo cliente y título), creada por la misma RPC de aceptación que usa la aplicación; los borradores y rechazados no tienen orden. Numeración `PRE-0001…` por organización.
+- **Cómo lo hace**: actúa como el `owner` de cada organización y usa las mismas RPC que la aplicación (`create_quote`, `add_quote_item`, `accept_quote`, `reject_quote`), así que se aplican RLS, el cálculo de totales en PostgreSQL, el solo lectura de terminales y los eventos de actividad con el `owner` como actor. No desactiva triggers, no usa `service_role` y no escribe directamente en `quotes`, `quote_items`, `work_orders` ni `activity_events`.
+- **Idempotencia**: cada presupuesto lleva una clave estable (`q01`…, nunca cambiar una publicada) registrada en `private.demo_fixture_identity` con `entity_type = 'quote'`. Una segunda ejecución inserta 0 presupuestos, 0 órdenes y 0 eventos, y un presupuesto que el usuario haya aceptado, rechazado o editado no se recrea ni se revierte. Una sola transacción con `pg_advisory_xact_lock`; sin `DELETE`, `TRUNCATE` ni `DROP`. Las órdenes generadas por aceptación no reciben identidad propia (no son fixtures de `demo-orders.sql`).
+- **Ejecutar**: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/demo-quotes.sql` (o pegar el contenido en el SQL editor), tras `demo-crm.sql`.
+- **Deshacer**: no hay borrado (los presupuestos y las órdenes no se borran y el historial es inmutable). Los borradores demo se rechazan desde la aplicación; los aceptados y rechazados son de solo lectura.
+- **Verificación (solo lectura)**:
+
+```sql
+select o.name, q.status, count(*) as presupuestos, sum(q.total_cents) as total_centimos
+from public.quotes q join public.organizations o on o.id = q.organization_id
+where o.name in ('Demo Norte', 'Demo Sur')
+group by o.name, q.status order by o.name, q.status;
+```

@@ -18,16 +18,27 @@ describe('rutas de Clientes y Tecnicos', () => {
     '/Orders/aaaa/edit',
     '/%6frders',
     '//orders/',
+    '/quotes',
+    '/quotes/new',
+    '/Quotes/aaaa',
+    '/%71uotes',
+    '//quotes/',
   ])('protege %s', (path) => {
     expect(isProtectedPath(path)).toBe(true);
   });
 
-  it.each(['/customer', '/customersx', '/technician', '/api/customers', '/order', '/ordersx'])(
-    'no protege %s',
-    (path) => {
-      expect(isProtectedPath(path)).toBe(false);
-    },
-  );
+  it.each([
+    '/customer',
+    '/customersx',
+    '/technician',
+    '/api/customers',
+    '/order',
+    '/ordersx',
+    '/quote',
+    '/quotesx',
+  ])('no protege %s', (path) => {
+    expect(isProtectedPath(path)).toBe(false);
+  });
 });
 
 describe('navegacion', () => {
