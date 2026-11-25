@@ -104,7 +104,23 @@ function expectLocalCloseUnknown(container: HTMLElement) {
 beforeEach(() => {
   vi.clearAllMocks();
   signOut.mockReset();
-  h.createClient.mockResolvedValue({ auth: { signOut } });
+  h.createClient.mockImplementation(
+    async (opts?: { revocation?: { requested: boolean; status: number | null } }) => ({
+      auth: {
+        // Doble fiel al transporte: un signOut sin error implica una peticion 2xx observada.
+        signOut: async (...args: unknown[]) => {
+          const res = await (
+            signOut as (...a: unknown[]) => Promise<{ error: unknown } | undefined>
+          )(...args);
+          if (res && res.error === null && opts?.revocation) {
+            opts.revocation.requested = true;
+            opts.revocation.status = 200;
+          }
+          return res;
+        },
+      },
+    }),
+  );
   h.hasValidSession.mockResolvedValue(true);
   useStore(makeStore([...SESSION, 'theme']));
 });

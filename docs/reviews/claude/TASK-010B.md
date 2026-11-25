@@ -40,3 +40,10 @@ Checks locales (RETEST): format, lint, typecheck, build exit 0; unit 691/691; in
 
 ## Estado
 **BLOCKED** hasta CI verde en ambos jobs sobre el nuevo SHA. G2 abierta hasta reauditoría de Codex. Cloud sin cambios: cinco migraciones nuevas pendientes de aplicación autorizada.
+
+## RETEST-2 (AUDIT-002-RETEST-2, A02-01)
+- **FAIL original** (Codex, sobre `da539c4`): `classifyRevocation` daba por confirmado un logout sin petición HTTP y sin error del SDK aunque existiera una cookie de sesión truncada o ilegible.
+- **Corrección** (Develop, `src/features/auth/actions.ts`): `logoutAction` lee `getLocalSessionState()` antes de `signOut`; sin petición enviada y sin error, solo es `confirmed` si la ausencia inicial de cookies está demostrada (`absent`); `present` o `unreadable` → cierre no confirmado (aviso + limpieza local). Con petición, sin cambios.
+- **Pruebas:** `tests/unit/logout-no-request.test.ts` (4: cookie truncada, almacén vacío, almacén ilegible, sesión válida 2xx). Testing actualizó dos pruebas independent cuyos dobles devolvían `signOut {error:null}` sin simular la petición (`logout-action.test.ts`, `login-logout-failed-retest.test.tsx`), sin relajar expectativas.
+- **Testing: PASS** dirigido: 8 archivos, 119/119 unit de auth/logout; tsc y eslint sin errores. Sin suites completas, integración ni E2E (CI).
+- Git: HEAD `da539c4` antes y después; sin dependencias ni migraciones.

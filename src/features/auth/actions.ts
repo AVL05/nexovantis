@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { createClient, type RevocationObserver } from '@/lib/supabase/server';
 
+import { getLocalSessionState, type LocalSessionState } from './local-session';
 import { safeNextPath } from './redirect';
 import { LOGIN_PATH, LOGOUT_UNCONFIRMED_PATH, SESSION_COOKIE_PATTERN } from './routes';
 import { loginSchema } from './schema';
@@ -60,18 +61,22 @@ const SESSION_ABSENT_CODES = new Set(['session_not_found', 'user_not_found']);
 /**
  * Clasifica el resultado de la revocacion. `auth-js` devuelve `error: null` ante 401/403/404, asi
  * que el SDK no basta: se combina con la respuesta HTTP observada en el transporte.
- * - `confirmed`: 2xx, o no hubo peticion (sin cookies de sesion no hay nada que revocar).
+ * - `confirmed`: 2xx, o no hubo peticion y el almacen estaba legible sin cookies de sesion (nada que revocar).
  * - `session-absent`: 403 de GoTrue con `session_not_found`/`user_not_found`.
  * - `indeterminate`: cualquier otra cosa (resto de no 2xx, cuerpo no JSON, excepcion, error del SDK).
  */
 function classifyRevocation(
   observer: RevocationObserver,
   sdkError: unknown,
+  initialState: LocalSessionState,
 ): 'confirmed' | 'session-absent' | 'indeterminate' {
   if (observer.threw) return 'indeterminate';
   if (observer.status === null) {
-    // Sin respuesta observada: si hubo peticion es que no llego; si no la hubo, decide el SDK.
-    return observer.requested || sdkError ? 'indeterminate' : 'confirmed';
+    // Sin respuesta observada: si hubo peticion es que no llego. Sin peticion, solo es seguro dar
+    // por cerrada la sesion si el almacen se leyo y no tenia cookies de sesion; una cookie
+    // truncada/ilegible o un almacen ilegible no acreditan nada.
+    if (observer.requested || sdkError) return 'indeterminate';
+    return initialState === 'absent' ? 'confirmed' : 'indeterminate';
   }
   if (observer.status >= 200 && observer.status < 300) {
     return sdkError ? 'indeterminate' : 'confirmed';
@@ -98,10 +103,11 @@ function classifyRevocation(
 export async function logoutAction(): Promise<void> {
   const observer: RevocationObserver = { requested: false, status: null, code: null, threw: false };
   let outcome: ReturnType<typeof classifyRevocation> = 'indeterminate';
+  const initialState = await getLocalSessionState();
   try {
     const supabase = await createClient({ revocation: observer });
     const { error } = await supabase.auth.signOut({ scope: 'local' });
-    outcome = classifyRevocation(observer, error);
+    outcome = classifyRevocation(observer, error, initialState);
   } catch {
     outcome = 'indeterminate';
   }
