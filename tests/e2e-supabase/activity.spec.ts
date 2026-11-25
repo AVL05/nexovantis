@@ -128,7 +128,7 @@ test('filtros por entidad, accion y rango de fechas (dia natural de Madrid), pag
   await page.goto('/activity');
   const times = await page
     .getByRole('region', { name: 'Registro de actividad' })
-    .locator('time')
+    .locator('time:visible')
     .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('datetime') ?? ''));
   expect(times.length).toBeGreaterThan(1);
   expect([...times].sort().reverse()).toEqual(times);

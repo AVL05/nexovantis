@@ -88,3 +88,12 @@ Comandos y resultados:
 | `pnpm format:check` | OK |
 
 Pendiente para CI (BLOCKED): `pnpm test:e2e:supabase` sobre el SHA objetivo; en particular que "salidas concurrentes" cumpla ya la cadena `balance_before[i] === balance_after[i-1]` ordenando por `seq`, ademas de misma clave en paralelo, archivar/mover, consumir/cancelar, referencia duplicada y ACL real de la secuencia. Sin hallazgos nuevos.
+
+## RETEST-CI (CI 45650393444, HEAD 1a6c4db)
+
+Fallo: `inventory.spec.ts:116` (strict mode): tabla de escritorio y lista movil (`lg:block` / `lg:hidden`) coexisten en el DOM. Correccion solo en tests, con helper local `visible = (l) => l.filter({ visible: true })`; sin `.first()`/`.nth()` nuevos, aserciones intactas.
+
+- inventory.spec.ts: historial `link orderTitle` y `text 'Existencia inicial'` (l.180-181), y los 5 `getByRole('link', { name })` del listado de articulos (`?estado=bajo|agotado|archivados`, `?q=`, listado base) envueltos en `visible(...)`.
+- activity.spec.ts (mismo defecto, en la comprobacion de orden): `.locator('time')` pasa a `.locator('time:visible')`; antes recogia los `time` de ambas representaciones (secuencia duplicada, nunca ordenada).
+- Local: typecheck, eslint y prettier --check OK; `playwright --list` detecta ambos specs. Sin app modificada.
+- Veredicto: PASS dirigido estatico; E2E real BLOCKED por CI (requiere Supabase local) sobre el SHA del nuevo commit.

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
 import { requireLocalSupabaseEnv } from '../support/local-supabase';
@@ -17,6 +17,10 @@ let world: CrmWorld;
 test.beforeAll(async () => {
   world = await getCrmWorld();
 });
+
+// Tabla (escritorio) y lista (movil) conviven en el DOM y se alternan por CSS (`lg`): se afirma
+// siempre sobre la representacion visible del viewport.
+const visible = (locator: Locator): Locator => locator.filter({ visible: true });
 
 const authOptions = { auth: { persistSession: false, autoRefreshToken: false } } as const;
 
@@ -176,17 +180,17 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
   await expect(page.getByTestId('item-balance')).toHaveText('5 m');
   await expect(page.locator('header').getByText('Stock bajo', { exact: true })).toBeVisible();
   const history = page.getByRole('region', { name: 'Historial de movimientos' });
-  await expect(history.getByRole('link', { name: orderTitle })).toBeVisible();
-  await expect(history.getByText('Existencia inicial')).toBeVisible();
+  await expect(visible(history.getByRole('link', { name: orderTitle }))).toBeVisible();
+  await expect(visible(history.getByText('Existencia inicial'))).toBeVisible();
 
   // Filtros de estado del listado e indicadores.
   await page.goto('/inventory?estado=bajo');
-  await expect(page.getByRole('link', { name })).toBeVisible();
+  await expect(visible(page.getByRole('link', { name }))).toBeVisible();
   await page.goto('/inventory?estado=agotado');
-  await expect(page.getByRole('link', { name })).toHaveCount(0);
+  await expect(visible(page.getByRole('link', { name }))).toHaveCount(0);
   await expect(page.getByTestId('inventory-low')).toBeVisible();
   await page.goto(`/inventory?q=${encodeURIComponent(reference.toLowerCase())}`);
-  await expect(page.getByRole('link', { name })).toBeVisible();
+  await expect(visible(page.getByRole('link', { name }))).toBeVisible();
 
   // Archivar con saldo: solo lectura.
   await page.goto(`/inventory/${id}`);
@@ -199,9 +203,9 @@ test('flujo: alta, entradas, salidas, consumo en orden, archivado y actividad', 
   await page.goto(`/inventory/${id}/edit`);
   await expect(page.getByText('Un artículo archivado es de solo lectura')).toBeVisible();
   await page.goto('/inventory');
-  await expect(page.getByRole('link', { name })).toHaveCount(0);
+  await expect(visible(page.getByRole('link', { name }))).toHaveCount(0);
   await page.goto('/inventory?estado=archivados');
-  await expect(page.getByRole('link', { name })).toBeVisible();
+  await expect(visible(page.getByRole('link', { name }))).toBeVisible();
 
   // Restaurar y volver a mover.
   await page.goto(`/inventory/${id}`);
