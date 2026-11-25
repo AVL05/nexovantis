@@ -2,7 +2,7 @@
 
 Gestión de operaciones y servicios técnicos para pequeñas empresas de mantenimiento, instalaciones y reparaciones.
 
-**Estado:** fundación técnica (F2). Hay un scaffold Next.js con una página inicial mínima, comprobaciones de calidad y CI; sin funcionalidad de negocio, base de datos ni despliegue.
+**Estado:** F3 en curso (base de datos). Hay un scaffold Next.js con una página inicial mínima, comprobaciones de calidad y CI, y el esquema de base de datos (migraciones de Supabase, RLS y pruebas). Sin interfaz de negocio, autenticación, ni despliegue.
 
 ## Producto
 
@@ -41,37 +41,62 @@ La telemetría de Next.js está desactivada en la configuración de Playwright y
 
 ## Scripts
 
-| Script              | Descripción                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| `pnpm lint`         | ESLint 9 (flat config, `eslint-config-next` y Prettier) con `--max-warnings=0`.      |
-| `pnpm typecheck`    | `next typegen` y `tsc --noEmit` con TypeScript estricto.                             |
-| `pnpm format:check` | Comprueba el formato con Prettier (código, tests, CI y README).                      |
-| `pnpm format`       | Aplica el formato con Prettier a los mismos archivos.                                |
-| `pnpm test:unit`    | Pruebas unitarias con Vitest y Testing Library.                                      |
-| `pnpm test:e2e`     | Pruebas E2E con Playwright (Chromium); construye y arranca la app en el puerto 3100. |
+| Script                  | Descripción                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm lint`             | ESLint 9 (flat config, `eslint-config-next` y Prettier) con `--max-warnings=0`.                                |
+| `pnpm typecheck`        | `next typegen` y `tsc --noEmit` con TypeScript estricto.                                                       |
+| `pnpm format:check`     | Comprueba el formato con Prettier (código, tests, CI y README).                                                |
+| `pnpm format`           | Aplica el formato con Prettier a los mismos archivos.                                                          |
+| `pnpm test:unit`        | Pruebas unitarias con Vitest y Testing Library.                                                                |
+| `pnpm test:integration` | Migraciones y RLS en PGlite (PostgreSQL real in-process con un shim de `auth`; no es Supabase).                |
+| `pnpm test:supabase`    | Pruebas contra el stack local de Supabase (`supabase start`): pensadas para CI; requieren variables del stack. |
+| `pnpm test:e2e`         | Pruebas E2E con Playwright (Chromium); construye y arranca la app en el puerto 3100.                           |
 
 `format` y `format:check` no incluyen `docs/` ni los archivos de instrucciones de agentes: su estilo de Markdown no coincide con la configuración de Prettier y su formato se decide aparte.
 
-`test:integration`: pendiente de F3 (requiere base de datos de pruebas); no existe todavía y no se presenta como evidencia.
+## Variables de entorno
+
+Copia `.env.example` a `.env.local` (no se versiona) y rellena solo valores públicos:
+
+| Variable                               | Uso                                             |
+| -------------------------------------- | ----------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | URL de la API de Supabase (http o https).       |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Clave publicable (nunca una clave de servicio). |
+
+`src/lib/env.ts` las valida bajo demanda con Zod: `pnpm build` no las exige. Las pruebas `test:supabase` usan `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` del stack local (`supabase status -o env`); la clave de servicio local solo prepara datos de prueba y nunca se usa en `src/`.
+
+## Base de datos
+
+El esquema vive en `supabase/migrations/` (organizaciones, membresías, clientes y técnicos, con RLS por operación). La matriz de roles y las decisiones asociadas son una propuesta pendiente de aprobación humana: ver [ADR-001](docs/adr/ADR-001-roles-rls.md).
+
+Las pruebas de base de datos se ejecutan en tres niveles distintos:
+
+1. `pnpm test:integration` (PGlite): aplica el shim de `auth` y las migraciones sobre PostgreSQL real en memoria y prueba esquema, restricciones, privilegios y RLS. No requiere Docker. **No es Supabase**: no incluye PostgREST ni Auth.
+2. `pnpm test:supabase` (stack local de Supabase): se ejecuta en el job `supabase` de CI con `supabase start` (CLI 2.122.1, requiere Docker). Aún no se ha ejecutado: necesita un push autorizado.
+3. Proyecto de Supabase Cloud: no se ha creado ni usado.
+
+Los tipos de `src/lib/supabase/database.types.ts` están escritos a mano y se regenerarán con la CLI de Supabase.
 
 ## Pruebas
 
 - Unitarias: `tests/unit/` (las de `independent/` pertenecen a Testing).
+- Integración: `tests/integration/` (PGlite; las de `independent/` pertenecen a Testing) y `tests/integration/supabase/` (stack local de CI).
 - E2E: `tests/e2e/` (las de `independent/` pertenecen a Testing). `playwright.config.ts` ejecuta `pnpm build && pnpm start --port 3100`; en local reutiliza un servidor ya iniciado en ese puerto y en CI no.
 - Soporte compartido: `tests/support/`.
 
 ## CI
 
-`.github/workflows/ci.yml` se ejecuta en `push` y `pull_request` con permisos de solo lectura, Node 24 y pnpm según `packageManager`. Ejecuta, en orden: `pnpm install --frozen-lockfile`, `format:check`, `lint`, `typecheck`, `test:unit`, `build`, instalación de Chromium y `test:e2e`; sube el informe de Playwright si falla. El workflow aún no se ha ejecutado en GitHub (requiere push); sus comandos sí se han ejecutado en local.
+`.github/workflows/ci.yml` se ejecuta en `push` y `pull_request` con permisos de solo lectura, Node 24 y pnpm según `packageManager`. Ejecuta, en orden: `pnpm install --frozen-lockfile`, `format:check`, `lint`, `typecheck`, `test:unit`, `test:integration`, `build`, instalación de Chromium y `test:e2e`; sube el informe de Playwright si falla. Un segundo job, `supabase`, arranca el stack local con la CLI 2.122.1, exporta las variables del stack sin imprimirlas y ejecuta `pnpm test:supabase`. El workflow con estos cambios aún no se ha ejecutado en GitHub (requiere push); los comandos del job `quality` sí se han ejecutado en local, los del job `supabase` no (sin Docker en el entorno de desarrollo).
 
 ## Estructura
 
 ```text
 src/app/          rutas y composición (App Router)
-src/features/     dominio por módulo (vacío en F2)
-src/components/   UI compartida (vacío en F2)
-src/lib/          clientes y utilidades (vacío en F2)
-tests/            unit, e2e y soporte
+src/features/     dominio por módulo (esquemas Zod de clientes y técnicos)
+src/components/   UI compartida (vacío)
+src/lib/          entorno y clientes de Supabase
+supabase/         config.toml y migraciones SQL
+tests/            unit, integration, e2e y soporte
 docs/             documentación de producto, arquitectura y flujo
 ```
 

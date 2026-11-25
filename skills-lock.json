@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "skills": {
+    "premium-frontend-director": {
+      "source": "AVL05/premium-frontend-director",
+      "commit": "88b3446cda027e970455b1bc9b1a8b618e1c8ac2",
+      "sourceType": "github",
+      "skillPath": "skills/premium-frontend-director/SKILL.md",
+      "computedHash": "86faddbd96341c7afdaf88e91e3efe52402fccf8031e29fc2a2f5c76115230c5"
+    }
+  }
+}

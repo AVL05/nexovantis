@@ -29,6 +29,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:unit
+      - run: pnpm test:integration
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
@@ -41,3 +42,70 @@ jobs:
           path: playwright-report/
           if-no-files-found: ignore
           retention-days: 7
+
+  supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Aplica supabase/migrations/ sobre un PostgreSQL y Auth reales (Docker en el runner).
+      - name: Arrancar Supabase local
+        run: supabase start
+
+      # Las claves del stack local se exportan al entorno del job sin imprimirlas.
+      - name: Exportar variables del stack local
+        run: |
+          set -euo pipefail
+          status_file="$RUNNER_TEMP/supabase-status.env"
+          supabase status -o env > "$status_file"
+          get() { grep -E "^$1=" "$status_file" | head -n1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
+          url="$(get API_URL)"
+          anon_key="$(get ANON_KEY)"
+          service_key="$(get SERVICE_ROLE_KEY)"
+          rm -f "$status_file"
+          for value in "$url" "$anon_key" "$service_key"; do
+            if [ -z "$value" ]; then
+              echo 'supabase status no devolvio API_URL, ANON_KEY o SERVICE_ROLE_KEY' >&2
+              exit 1
+            fi
+          done
+          echo "::add-mask::$anon_key"
+          echo "::add-mask::$service_key"
+          {
+            echo "SUPABASE_URL=$url"
+            echo "SUPABASE_ANON_KEY=$anon_key"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$service_key"
+          } >> "$GITHUB_ENV"
+
+      - run: pnpm test:supabase
+
+      # E2E con Auth real: construye la app contra el stack local y ejecuta tests/e2e-supabase.
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e:supabase
+
+      - name: Subir informe de Playwright (Auth real)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-supabase
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Detener Supabase local
+        if: always()
+        run: supabase stop --no-backup
