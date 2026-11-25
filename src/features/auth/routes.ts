@@ -3,6 +3,16 @@
 export const LOGIN_PATH = '/login';
 export const DASHBOARD_PATH = '/dashboard';
 
+/** Valor fijo del parametro `aviso` cuando no se pudo confirmar la revocacion remota al cerrar sesion. */
+export const LOGOUT_UNCONFIRMED_NOTICE = 'cierre-no-confirmado';
+export const LOGOUT_UNCONFIRMED_PATH = `${LOGIN_PATH}?aviso=${LOGOUT_UNCONFIRMED_NOTICE}`;
+
+/**
+ * Cookies de sesion de @supabase/ssr: `sb-<ref>-auth-token` o fragmentos `.0`, `.1`...
+ * Si tras cerrar sesion queda alguna, la sesion local sigue viva.
+ */
+export const SESSION_COOKIE_PATTERN = /^sb-.+-auth-token(\.\d+)?$/;
+
 export const CUSTOMERS_PATH = '/customers';
 export const TECHNICIANS_PATH = '/technicians';
 

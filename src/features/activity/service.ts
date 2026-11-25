@@ -33,7 +33,11 @@ export async function listEntityHistory(
     .eq('organization_id', ctx.organizationId)
     .eq('entity_type', entityType)
     .eq('entity_id', entityId)
+    // Orden total: occurred_at es la hora de INICIO de la transaccion y puede coincidir (archivar y
+    // restaurar en una misma transaccion); seq la fija la BD al insertar y desempata. Los eventos
+    // historicos (anteriores a la migracion) tienen seq nulo: nunca se inventa su orden relativo.
     .order('occurred_at', { ascending: false })
+    .order('seq', { ascending: false, nullsFirst: false })
     .limit(HISTORY_LIMIT);
   if (events.error) return fail(mapDbError(events.error));
 

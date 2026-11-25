@@ -95,3 +95,19 @@ on conflict do nothing;
 ```
 
 Seed de datos demo (clientes y técnicos ficticios, idempotente): véase [SEED.md](SEED.md).
+
+## Migraciones de TASK-010 (remediación de AUDIT-002): preparadas, NO aplicadas en Cloud
+
+Cuatro migraciones nuevas, posteriores a `20261124100000`: `20261125090000_task010_name_constraints`, `20261125090100_task010_activity_seq`, `20261125090200_task010_archived_readonly` y `20261125090300_task010_demo_fixture_identity`. No se ha ejecutado nada en Cloud. Su aplicación requiere autorización humana expresa.
+
+### Verificaciones previas (solo lectura), antes de aplicarlas
+
+1. **Nombres** (`supabase/checks/name-constraints-precheck.sql`, con privilegios de administración): debe devolver **0 filas**. Lista `table_name`, `id` y `reason` de cada organización, cliente o técnico con nombre vacío, solo espacios en blanco (tabulaciones, saltos de línea, NBSP…) o de más de 200 caracteres almacenados. Si devuelve filas, la migración `…090000` **fallaría entera** (no recorta ni reescribe datos): corregirlas a mano, con decisión humana, y repetir la comprobación.
+2. **Eventos**: anotar `select count(*) from public.activity_events` y comprobar que la migración `…090100` los deja con `seq` nulo (los eventos existentes no reciben orden inventado).
+3. **Archivados con edición pendiente**: `…090200` no cambia datos, pero desde su aplicación los archivados son de solo lectura (también para administración vía SQL: restaurar primero). Avisar a quien mantenga scripts que editen archivados.
+4. **Seed y reconciliación**: si Cloud ya recibió el seed anterior, aplicar `…090300`, ejecutar `supabase/seeds/reconcile-demo-crm.sql` en modo comprobación, revisar el informe y solo entonces aplicar y volver a lanzar el seed (orden y riesgos en [SEED.md](SEED.md)). No lanzar el seed nuevo sin reconciliar: omitiría los fixtures que colisionen, pero nunca duplica filas con el mismo nombre ni con la misma firma de contacto.
+5. Orden de aplicación por el conector (`apply_migration`), una a una y en el orden de la versión; después alinear el historial como se hizo antes (versión del conector distinta de la del repositorio).
+
+### Comprobaciones aplazadas (stack local de Supabase en CI y, tras la autorización, Cloud)
+
+Sin ejecutar: `pnpm test:supabase` (`logout-revocation`, `name-constraints`, `archived-readonly`, `archive-restore`, `rls`) y `pnpm test:e2e:supabase` (`task010-ui`, `crm`) con Auth y PostgREST reales; la caracterización de la sesión copiada cuando falla la revocación remota (A02-01) solo se comprueba allí. Tras aplicar en Cloud, en solo lectura: restricciones `*_name_length` con la definición nueva, columna `activity_events.seq` (bigint, única, sin INSERT/UPDATE para `anon` y `authenticated`), triggers `*_prevent_unarchive` con `WHEN (old.archived_at is not null or new.archived_at is not null)` y `private.demo_fixture_identity` sin privilegios para `anon` y `authenticated`; los avisos de seguridad de Supabase deben seguir en 0.

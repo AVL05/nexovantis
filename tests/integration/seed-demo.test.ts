@@ -355,6 +355,12 @@ describe('seed demo: respeta registros existentes (H-1)', () => {
   });
 
   it('un designado modificado por un usuario no es alterado por la re-ejecucion', async () => {
+    // Un archivado es de solo lectura (A02-06): se restaura primero y despues se edita.
+    await execAs(
+      ID.memberNorte,
+      `update public.customers set archived_at = null where name = 'Metálicas Granito';
+       update public.technicians set archived_at = null where full_name = 'Carmen Bosch Vera'`,
+    );
     await execAs(
       ID.memberNorte,
       `update public.customers set notes = 'nota editada', phone = '+34 000 999 999' where name = 'Metálicas Granito';
@@ -362,7 +368,8 @@ describe('seed demo: respeta registros existentes (H-1)', () => {
     );
     const c = await rowOf('customers', 'Metálicas Granito');
     const t = await rowOf('technicians', 'Carmen Bosch Vera');
-    expect(c.archived_at).not.toBeNull();
+    expect(c.archived_at).toBeNull();
+    expect(c.notes).toBe('nota editada');
     const before = await snapshot(db);
 
     await runSeed(db);

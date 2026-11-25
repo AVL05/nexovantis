@@ -160,13 +160,13 @@ describe('triggers', () => {
       s.technicianB,
     ]);
     expect((row.rows[0].archived_at as Date).toISOString()).toBe(archivedAt);
-    // Otras ediciones de un registro archivado siguen permitidas (mismo archived_at).
-    const edited = await db.asUser(s.memberB, (tx) =>
-      tx.query(`update public.technicians set notes = 'nota' where id = $1 returning id`, [
-        s.technicianB,
-      ]),
+    // Un archivado es de solo lectura (A02-06): ninguna edicion, ni siquiera con el mismo archived_at.
+    const edit = await sqlState(() =>
+      db.asUser(s.memberB, (tx) =>
+        tx.query(`update public.technicians set notes = 'nota' where id = $1`, [s.technicianB]),
+      ),
     );
-    expect(edited.rows).toHaveLength(1);
+    expect(edit).toBe('23000');
   });
 
   it('un usuario no escribe id, organization_id ni created_at por columna', async () => {

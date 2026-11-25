@@ -155,6 +155,9 @@ export type Database = {
           entity_id: string;
           action: 'archived' | 'restored';
           occurred_at: string;
+          // Orden de insercion asignado por la BD (A02-05). Nulo en los eventos historicos
+          // anteriores a la migracion: su orden relativo no es reconstruible y no se inventa.
+          seq: number | null;
         };
         // Solo lectura para usuarios (sin GRANT de escritura): los eventos los escribe el trigger.
         Insert: {
@@ -165,6 +168,7 @@ export type Database = {
           entity_id: string;
           action: 'archived' | 'restored';
           occurred_at?: string;
+          seq?: never; // no escribible por usuarios (sin GRANT): lo asigna la BD
         };
         Update: {
           id?: string;
@@ -174,6 +178,7 @@ export type Database = {
           entity_id?: string;
           action?: 'archived' | 'restored';
           occurred_at?: string;
+          seq?: never;
         };
         Relationships: [
           {

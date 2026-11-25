@@ -8,6 +8,8 @@ import {
 } from '@playwright/test';
 import { randomBytes, randomUUID } from 'node:crypto';
 
+import { requireLocalSupabaseEnv } from '../../../support/local-supabase';
+
 // Soporte de las pruebas independientes de Testing para TASK-007 (Auth real, E2E).
 // Propietario: Testing. Develop no lo modifica. No depende de tests/support/ ni del globalSetup de
 // Develop: cada worker crea sus propios usuarios y organizaciones con la clave de servicio del
@@ -15,7 +17,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 // generan al ejecutar; no se guardan ni se imprimen.
 //
 // Entorno requerido (CI, job `supabase`): SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
-// Si faltan, las pruebas FALLAN (nunca se saltan). Si SUPABASE_URL no es local, se rechazan.
+// Si faltan, las pruebas FALLAN (nunca se saltan). Si SUPABASE_URL no es local, se rechazan
+// (validacion en tests/support/local-supabase.ts).
 
 export type PwCookie = Awaited<ReturnType<BrowserContext['cookies']>>[number];
 export type Role = 'owner' | 'member';
@@ -38,27 +41,13 @@ export type World = {
   createUser: (label: string, membership: { org: Org; role: Role } | null) => Promise<TestUser>;
 };
 
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 const authOptions = { auth: { persistSession: false, autoRefreshToken: false } } as const;
 
+// TASK-010 / A02-02: la validacion estricta del destino local vive en tests/support/local-supabase.ts
+// (se rechazan hosts remotos, variantes tipo localhost.evil.com, credenciales y URLs invalidas) y se
+// ejecuta ANTES de crear ningun cliente administrativo.
 export function requireEnv() {
-  const names = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
-  const missing = names.filter((name) => !process.env[name]?.trim());
-  if (missing.length > 0) {
-    throw new Error(`Faltan variables del stack local de Supabase: ${missing.join(', ')}`);
-  }
-  const url = process.env.SUPABASE_URL as string;
-  const host = new URL(url).hostname;
-  if (!LOCAL_HOSTS.has(host)) {
-    throw new Error(
-      'Las pruebas E2E con Auth real crean usuarios y solo pueden ejecutarse contra un stack local (127.0.0.1/localhost).',
-    );
-  }
-  return {
-    url,
-    anonKey: process.env.SUPABASE_ANON_KEY as string,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY as string,
-  };
+  return requireLocalSupabaseEnv();
 }
 
 function must<T>(result: { data: T | null; error: { message: string } | null }, what: string): T {

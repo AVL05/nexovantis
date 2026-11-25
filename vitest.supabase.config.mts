@@ -15,6 +15,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/integration/supabase/**/*.test.ts'],
+    // Valida que SUPABASE_URL sea el stack LOCAL antes de cargar cualquier suite (A02-02).
+    setupFiles: ['tests/support/supabase-local-guard.setup.ts'],
     testTimeout: 60_000,
     hookTimeout: 120_000,
   },

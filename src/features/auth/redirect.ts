@@ -2,30 +2,46 @@
 
 const DEFAULT_PATH = '/dashboard';
 const MAX_LENGTH = 2048;
+const MAX_DECODE_LEVELS = 5;
 const BASE = 'http://nexovantis.invalid';
 
-// Caracteres de control, DEL, espacios y barra invertida: nunca en una ruta interna valida.
-const FORBIDDEN = /[\u0000- \u007f\\]/;
+// Caracteres de control, DEL, espacios y barra invertida: nunca aparecen SIN codificar en el valor.
+const FORBIDDEN_RAW = /[\u0000- \u007f\\]/;
+// Tras decodificar la RUTA: controles y barra invertida siguen prohibidos; el espacio es un dato valido.
+const FORBIDDEN_DECODED_PATH = /[\u0000-\u001f\u007f\\]/;
 
-function isInternal(path: string): boolean {
+/** Ruta sin consulta ni fragmento: solo ella decide el origen y el destino de la navegacion. */
+function splitPath(value: string): string {
+  const end = value.search(/[?#]/);
+  return end === -1 ? value : value.slice(0, end);
+}
+
+function isInternalPath(path: string, allowSpace: boolean): boolean {
   if (!path.startsWith('/') || path.startsWith('//')) return false;
-  if (path.length > MAX_LENGTH || FORBIDDEN.test(path)) return false;
-  if (/(^|\/)\.\.?(\/|\?|#|$)/.test(path)) return false;
-  return true;
+  if (path.length > MAX_LENGTH) return false;
+  if ((allowSpace ? FORBIDDEN_DECODED_PATH : FORBIDDEN_RAW).test(path)) return false;
+  return !path.split('/').some((segment) => segment === '.' || segment === '..');
 }
 
 /**
  * Devuelve `value` solo si es una ruta interna segura (empieza por una unica "/"); en cualquier
- * otro caso devuelve `fallback`. Rechaza esquemas, `//`, `\`, caracteres de control, segmentos `.`
- * y `..`, y formas codificadas que al decodificarse dejarian de ser una ruta interna.
- * Es idempotente: una ruta aceptada se devuelve sin cambios.
+ * otro caso devuelve `fallback`. Rechaza esquemas, `//`, `\`, caracteres de control sin codificar,
+ * segmentos `.` y `..`, y rutas codificadas (hasta varios niveles) que al decodificarse dejarian
+ * de ser una ruta interna. La consulta y el fragmento conservan su codificacion (`%20`, `%25`,
+ * acentos...) porque no pueden cambiar el origen. Es idempotente: una ruta aceptada se devuelve
+ * sin cambios.
  */
 export function safeNextPath(value: unknown, fallback = DEFAULT_PATH): string {
-  if (typeof value !== 'string' || !isInternal(value)) return fallback;
+  if (typeof value !== 'string' || value.length > MAX_LENGTH || FORBIDDEN_RAW.test(value)) {
+    return fallback;
+  }
+  const rawPath = splitPath(value);
+  if (!isInternalPath(rawPath, false)) return fallback;
 
-  // Revisa las versiones decodificadas (hasta 3 niveles) para detectar `//` o `\` ocultos.
-  let current = value;
-  for (let level = 0; level < 3; level += 1) {
+  // Decodifica la ruta nivel a nivel para detectar `//`, `\`, controles o `..` ocultos.
+  let current = rawPath;
+  for (let level = 0; ; level += 1) {
+    if (level >= MAX_DECODE_LEVELS) return fallback; // no converge: codificacion sospechosa
     let decoded: string;
     try {
       decoded = decodeURIComponent(current);
@@ -33,7 +49,7 @@ export function safeNextPath(value: unknown, fallback = DEFAULT_PATH): string {
       return fallback;
     }
     if (decoded === current) break;
-    if (!isInternal(decoded)) return fallback;
+    if (!isInternalPath(decoded, true)) return fallback;
     current = decoded;
   }
 

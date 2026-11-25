@@ -2,8 +2,12 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { BrandMark, BrandName } from '@/components/shell/BrandMark';
+import { Alert } from '@/components/ui/Alert';
+import { Button } from '@/components/ui/Button';
+import { logoutAction } from '@/features/auth/actions';
+import { hasLocalSessionCookies } from '@/features/auth/local-session';
 import { safeNextPath } from '@/features/auth/redirect';
-import { DASHBOARD_PATH } from '@/features/auth/routes';
+import { DASHBOARD_PATH, LOGOUT_UNCONFIRMED_NOTICE } from '@/features/auth/routes';
 import { hasValidSession } from '@/features/auth/session';
 
 import { LoginForm } from './login-form';
@@ -37,10 +41,13 @@ function BlueprintGrid({ id }: Readonly<{ id: string }>) {
 
 export default async function LoginPage({
   searchParams,
-}: Readonly<{ searchParams: Promise<{ next?: string | string[] }> }>) {
-  if (await hasValidSession()) redirect(DASHBOARD_PATH);
-
-  const { next } = await searchParams;
+}: Readonly<{ searchParams: Promise<{ next?: string | string[]; aviso?: string | string[] }> }>) {
+  const { next, aviso } = await searchParams;
+  const logoutUnconfirmed = aviso === LOGOUT_UNCONFIRMED_NOTICE;
+  // Doble fallo al cerrar sesion (Auth y borrado local): la sesion sigue viva en este navegador.
+  // No se redirige al panel: se avisa de que NO se cerro y se ofrece reintentar.
+  const sessionStillOpen = logoutUnconfirmed && (await hasLocalSessionCookies());
+  if (!sessionStillOpen && (await hasValidSession())) redirect(DASHBOARD_PATH);
 
   return (
     <main className="grid min-h-dvh overflow-x-clip md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
@@ -72,10 +79,45 @@ export default async function LoginPage({
         <div className="flex flex-1 items-center justify-center px-6 py-10 md:py-12">
           <div className="flex w-full max-w-sm flex-col gap-8">
             <div className="flex flex-col gap-2">
-              <h1 className="text-3xl font-semibold tracking-tight">Iniciar sesión</h1>
-              <p className="text-base text-ink-muted">Accede con la cuenta de tu organización.</p>
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {sessionStillOpen ? 'Sesión sin cerrar' : 'Iniciar sesión'}
+              </h1>
+              <p className="text-base text-ink-muted">
+                {sessionStillOpen
+                  ? 'Tu cuenta sigue abierta en este navegador.'
+                  : 'Accede con la cuenta de tu organización.'}
+              </p>
             </div>
-            <LoginForm next={safeNextPath(next)} />
+            {sessionStillOpen ? (
+              <Alert
+                tone="danger"
+                title="No se pudo cerrar tu sesión"
+                data-testid="logout-failed-notice"
+              >
+                Tu sesión sigue abierta en este navegador. Inténtalo de nuevo; si el problema
+                continúa, cierra el navegador y avisa a quien administra tu organización, sobre todo
+                si usas un equipo compartido.
+              </Alert>
+            ) : logoutUnconfirmed ? (
+              <Alert
+                tone="warning"
+                title="No se pudo confirmar el cierre de sesión en el servidor"
+                data-testid="logout-notice"
+              >
+                Tu sesión se cerró en este navegador. Si alguien copió tu sesión antes, podría
+                seguir siendo válida hasta que caduque. Si usas un equipo compartido o sospechas de
+                un acceso ajeno, avisa a quien administra tu organización.
+              </Alert>
+            ) : null}
+            {sessionStillOpen ? (
+              <form action={logoutAction}>
+                <Button type="submit" size="lg" className="w-full" data-testid="logout-retry">
+                  Reintentar cierre de sesión
+                </Button>
+              </form>
+            ) : (
+              <LoginForm next={safeNextPath(next)} />
+            )}
           </div>
         </div>
       </div>

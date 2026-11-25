@@ -78,18 +78,20 @@ describe.each(cases)('POST-05 / DH-06: archived_at en $table', ({ table, id }) =
     expect(await archivedAt(table, id())).toEqual(before);
   });
 
-  it('actualizar con el mismo archived_at y editar otros campos sigue permitido', async () => {
-    const same = await asUser(
-      s.ownerA,
-      `update public.${table} set archived_at = archived_at where id = $1 returning id`,
-      [id()],
-    );
-    expect(same.rows).toHaveLength(1);
-    const other = await su(
-      `update public.${table} set notes = 'editada' where id = $1 returning notes`,
-      [id()],
-    );
-    expect(other[0].notes).toBe('editada');
+  it('editar otros campos de un archivado se rechaza con 23000 (solo lectura hasta restaurar)', async () => {
+    // TASK-010 / A02-06 (decision humana ratificada): ANTES este caso exigia que editar otros
+    // campos de un archivado "sigue permitido" (mismo archived_at). La regla vigente es la
+    // contraria: los archivados son de solo lectura hasta su restauracion. Criterios completos en
+    // tests/integration/independent/archived-readonly.test.ts.
+    const before = await archivedAt(table, id());
+    for (const actor of [s.ownerA, s.memberA, 'su'] as const) {
+      const sql = `update public.${table} set notes = 'editada' where id = $1`;
+      const run = actor === 'su' ? () => su(sql, [id()]) : () => asUser(actor, sql, [id()]);
+      expect(await code(run), `${table} ${actor}`).toBe('23000');
+    }
+    expect(await archivedAt(table, id())).toEqual(before);
+    const notes = await su(`select notes from public.${table} where id = $1`, [id()]);
+    expect(notes[0].notes).not.toBe('editada');
   });
 
   it('restaurar (fecha a nulo) esta permitido para owner y member y deja la fila activa (DH-06)', async () => {

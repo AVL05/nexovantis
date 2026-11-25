@@ -1,6 +1,6 @@
 # ADR-001: roles, membresías y RLS (F3)
 
-- Estado: **propuesta, pendiente de aprobación humana**. La matriz de acceso, la regla de una organización por usuario y las decisiones DH-04, DH-05 y DH-06 no están ratificadas.
+- Estado: **aprobada por el humano** (ratificación definitiva comunicada en TASK-010, 2026-11-24; registro: docs/reviews/claude/TASK-010.md). Se ratifican: roles `owner` y `member` según la matriz de esta ADR; una única organización por usuario en el MVP; aprovisionamiento externo de organizaciones y membresías con registro público desactivado; ambos roles gestionan clientes y técnicos de su organización; los clientes y técnicos archivados son de solo lectura hasta su restauración (implementación en TASK-010, A02-06). DH-04, DH-05 y DH-06 ya constaban aprobadas (TASK-008A); DH-04, DH-05 y la ampliación de DH-08 siguen vinculadas a sus fases.
 - Tarea: TASK-006 (F3, base de datos). Fecha: 2026-11-24.
 - Implementación: `supabase/migrations/20261124090000_f3_core_tables.sql`, `20261124090100_f3_private_functions_and_triggers.sql` y `20261124090200_f3_rls_and_grants.sql`.
 
@@ -8,7 +8,7 @@
 
 Nexovantis es multiempresa: los datos de una organización no pueden verse ni modificarse desde otra (BR01). El producto no tiene registro público ni multiempresa avanzada (docs/PRODUCT_REQUIREMENTS.md). Supabase expone las tablas de `public` por PostgREST con los roles `anon` y `authenticated`, y concede por defecto todos los privilegios a ambos: sin GRANT/REVOKE explícitos, RLS sería la única barrera.
 
-## Decisión propuesta
+## Decisión
 
 ### Roles y matriz de acceso
 
@@ -21,6 +21,8 @@ Dos roles por membresía: `owner` y `member`.
 | customers, technicians                         | —    | SELECT, INSERT, UPDATE (incluye archivar) en su organización | igual que member                     |
 | DELETE / TRUNCATE en cualquier tabla           | —    | —                                                            | —                                    |
 | Crear organización; alta o cambio de membresía | —    | —                                                            | — (fuera de la app)                  |
+
+UPDATE de clientes y técnicos solo sobre registros activos: un registro archivado es de solo lectura y la única modificación admitida es su restauración (`archived_at` fecha -> null), sin cambios de otros campos en la misma operación (ratificado en TASK-010).
 
 En F3 `owner` solo se diferencia de `member` en renombrar la organización. La diferencia crecerá con las fases siguientes (por ejemplo, gestión del equipo) y cada ampliación necesita su propia decisión.
 
@@ -56,7 +58,7 @@ Las funciones de trigger (`set_updated_at`, `prevent_organization_change`, `prev
 
 Archivar es UPDATE de `archived_at`; la fila sigue existiendo y siendo visible para su organización (historial). No existe DELETE para usuarios (BR02). Las claves foráneas hacia `organizations` no tienen `on delete cascade`: una organización con datos no se borra por accidente.
 
-## Restricciones diferidas y decisiones no ratificadas
+## Restricciones diferidas y decisiones vinculadas a fases
 
 - **DH-04** (propuesta: impedir archivar técnicos con órdenes abiertas) y **DH-05** (ídem para clientes) dependen de las órdenes de trabajo, que no existen hasta F4. No se simulan. Punto exacto de F4: la rama `archived` (null -> fecha) de `private.prevent_unarchive()` en una migración nueva de F4 (`create or replace`), que comprobará la existencia de órdenes abiertas del técnico/cliente antes del `insert` del evento, en la misma transacción; el servicio de dominio (`archiveCustomer`/`archiveTechnician`) mapeará ese error a un conflicto legible.
 - **DH-06** (restaurar con evento), implementada en `20261124100000_task008b_restore_and_activity.sql` (TASK-008B), ratificada por el humano el 2026-11-24 (registro: docs/reviews/claude/TASK-008B.md, que precisa el alcance de la inmutabilidad frente a administradores): `private.prevent_unarchive()` (SECURITY DEFINER, `search_path` vacío, sin EXECUTE para usuarios) se dispara solo cuando cambia `archived_at` (`WHEN` en los triggers). null -> fecha archiva con hora de servidor y evento `archived`; fecha -> null restaura con evento `restored`; fecha -> otra fecha da 23000; sin `auth.uid()` no se archiva ni restaura (23000). Los eventos van a `public.activity_events` (solo SELECT para miembros, sin políticas de escritura, inmutable incluso para administración, `organization_id` sin cascade, sin datos personales). Cualquier miembro (owner o member) puede archivar y restaurar. DH-08 (ampliar `entity_type`/`action` a órdenes) exigirá ampliar los CHECK. Scripts de mantenimiento que archiven sin JWT quedan rechazados por diseño.
@@ -76,3 +78,12 @@ Archivar es UPDATE de `archived_at`; la fila sigue existiendo y siendo visible p
 - **Varias organizaciones por usuario**: fuera de alcance y complica `auth.uid()` → organización.
 - **Rol en el JWT (custom claims)**: introduce un hook de Auth y dificulta revocar roles de forma inmediata.
 - **Políticas con subconsulta directa a `memberships`**: provocan recursión en la política de `memberships`.
+
+## Cambios técnicos de TASK-010 (remediación de AUDIT-002)
+
+Sin cambiar las decisiones ratificadas ni la matriz de acceso; no se debilita ninguna política, GRANT ni restricción. Migraciones nuevas (`supabase/migrations/20261125090000` a `20261125090300`, descripción en [ARCHITECTURE.md](../ARCHITECTURE.md)):
+
+- **Archivados de solo lectura**: `private.prevent_unarchive()` rechaza (23000) todo UPDATE de una fila archivada que cambie columnas distintas de `archived_at`/`updated_at`, sin excepción por rol (tampoco administración), incluida la restauración combinada con edición. La única modificación admitida de un archivado es restaurarlo (evento `restored`). La rama `archived`/`restored` sigue siendo el punto de enganche de DH-04/DH-05 en F4.
+- **Orden de eventos**: `activity_events.seq` asignado por la BD (no escribible por usuarios); eventos históricos con `seq` nulo.
+- **Nombres**: CHECK sobre el valor almacenado (<= 200 caracteres, no solo espacio en blanco) en `organizations.name`, `customers.name` y `technicians.full_name`.
+- **Identidad de fixtures del seed**: `private.demo_fixture_identity`, sin privilegios para `anon` ni `authenticated` (esquema `private`, RLS activada sin políticas).

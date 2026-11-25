@@ -3,6 +3,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { requireLocalSupabaseEnv } from '../../support/local-supabase';
+
 // Pruebas contra el stack LOCAL de Supabase (`supabase start`) en CI: Auth (GoTrue), JWT reales y
 // PostgREST. Se ejecutan con `pnpm test:supabase` y requieren SUPABASE_URL, SUPABASE_ANON_KEY y
 // SUPABASE_SERVICE_ROLE_KEY (de `supabase status -o env`). Si faltan, FALLAN: nunca se saltan.
@@ -11,22 +13,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // de prueba), nunca en las comprobaciones de acceso, que usan clientes anon y autenticados.
 // Las contrasenas se generan al ejecutar y no se guardan ni se imprimen.
 
-const REQUIRED = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
-
 type Row = Record<string, unknown>;
 type Actor = { id: string; client: SupabaseClient };
 
-function requireEnv() {
-  const missing = REQUIRED.filter((name) => !process.env[name]?.trim());
-  if (missing.length > 0) {
-    throw new Error(`Faltan variables del stack local de Supabase: ${missing.join(', ')}`);
-  }
-  return {
-    url: process.env.SUPABASE_URL as string,
-    anonKey: process.env.SUPABASE_ANON_KEY as string,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY as string,
-  };
-}
+// El destino se valida (solo stack local) ANTES de construir ningun cliente: A02-02.
+const requireEnv = () => requireLocalSupabaseEnv();
 
 const authOptions = { auth: { persistSession: false, autoRefreshToken: false } } as const;
 

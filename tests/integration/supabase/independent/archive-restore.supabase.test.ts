@@ -3,27 +3,22 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { requireLocalSupabaseEnv } from '../../../support/local-supabase';
+
 // Caso independiente de Testing (TASK-008B PRE, DH-06) contra el stack LOCAL de Supabase en CI
 // (`pnpm test:supabase`): PostgREST y JWT reales. Complementa a
 // tests/integration/independent/archive-restore.test.ts (PGlite). Criterios C-31..C-34 en
 // docs/reviews/claude/TASK-008B-PRE.md. Si faltan las variables SUPABASE_*, FALLA (no se salta).
 // La clave de servicio solo prepara datos, lee eventos y comprueba el rechazo sin actor; nunca se
 // usa para las comprobaciones de acceso de usuario. Las contrasenas se generan al ejecutar.
+// TASK-010 (A02-02): el destino pasa por tests/support/local-supabase.ts antes de crear clientes.
 
 type Actor = { id: string; client: SupabaseClient };
 
 const authOptions = { auth: { persistSession: false, autoRefreshToken: false } } as const;
 
-function env() {
-  const names = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
-  const missing = names.filter((n) => !process.env[n]?.trim());
-  if (missing.length > 0) throw new Error(`Faltan variables SUPABASE_*: ${missing.join(', ')}`);
-  return {
-    url: process.env.SUPABASE_URL as string,
-    anonKey: process.env.SUPABASE_ANON_KEY as string,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY as string,
-  };
-}
+// TASK-010 / A02-02: el destino se valida (solo stack local) antes de crear ningun cliente.
+const env = () => requireLocalSupabaseEnv();
 
 function must<T>(r: { data: T | null; error: { message: string } | null }, what: string): T {
   if (r.error || r.data === null) {

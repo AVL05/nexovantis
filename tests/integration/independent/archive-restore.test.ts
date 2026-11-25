@@ -219,7 +219,7 @@ describe('C-01..C-08 archivar y restaurar con evento (TC-ARCH-05 / TC-TEAM-11)',
   });
 
   it.each(TABLES)(
-    'C-07 sin cambio de archived_at no se emite evento en $table (no archivado, mismo valor archivado, otros campos)',
+    'C-07 sin cambio de archived_at no se emite evento en $table (no archivado, otros campos; un archivado no se edita)',
     async ({ table }) => {
       const id = ids(table, 'A');
       await asUser(s.memberA, `update public.${table} set notes = 'a' where id = $1`, [id]);
@@ -227,11 +227,18 @@ describe('C-01..C-08 archivar y restaurar con evento (TC-ARCH-05 / TC-TEAM-11)',
       expect(await eventCount()).toBe(0);
       await asUser(s.memberA, ARCHIVE(table), [id]);
       expect(await eventCount()).toBe(1);
-      await asUser(s.ownerA, `update public.${table} set notes = 'b' where id = $1`, [id]);
-      await asUser(s.ownerA, `update public.${table} set archived_at = archived_at where id = $1`, [
-        id,
-      ]);
-      await su(`update public.${table} set notes = 'c' where id = $1`, [id]);
+      // TASK-010 / A02-06: ANTES se comprobaba que editar un archivado (notes = 'b' / 'c', incluso
+      // sin actor) seguia permitido y no emitia evento. Ahora esas ediciones se rechazan con 23000
+      // (archivados de solo lectura, decision humana ratificada); lo que se conserva es que no
+      // aparece ningun evento nuevo. Criterios completos en archived-readonly.test.ts.
+      expect(
+        await code(() =>
+          asUser(s.ownerA, `update public.${table} set notes = 'b' where id = $1`, [id]),
+        ),
+      ).toBe('23000');
+      expect(
+        await code(() => su(`update public.${table} set notes = 'c' where id = $1`, [id])),
+      ).toBe('23000');
       expect(await eventCount()).toBe(1);
     },
   );
@@ -477,11 +484,16 @@ describe('C-20..C-23 forma de la tabla de eventos, RLS, GRANT y datos personales
       'id',
       'occurred_at',
       'organization_id',
+      'seq',
     ]);
     const byName = Object.fromEntries(cols.map((c) => [c.column_name, c]));
-    for (const name of Object.keys(byName)) {
+    // TASK-010 / A02-05: se anade `seq` (bigint, orden de insercion). Es NULLABLE solo porque los
+    // eventos historicos no tienen un orden reconstruible y no se inventa uno; las filas nuevas
+    // siempre lo tienen (activity-order.test.ts). El resto sigue siendo NOT NULL.
+    for (const name of Object.keys(byName).filter((n) => n !== 'seq')) {
       expect(byName[name].is_nullable, name).toBe('NO');
     }
+    expect(byName.seq.data_type).toBe('bigint');
     expect(byName.id.data_type).toBe('uuid');
     expect(byName.occurred_at.data_type).toBe('timestamp with time zone');
     // Solo dos columnas de texto, ambas enumeradas por CHECK (sin texto libre).
@@ -569,6 +581,7 @@ describe('C-20..C-23 forma de la tabla de eventos, RLS, GRANT y datos personales
         'id',
         'occurred_at',
         'organization_id',
+        'seq', // TASK-010 / A02-05: orden de insercion, sin datos personales
       ]);
     }
   });

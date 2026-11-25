@@ -1,11 +1,12 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/server';
 
 import { safeNextPath } from './redirect';
-import { LOGIN_PATH } from './routes';
+import { LOGIN_PATH, LOGOUT_UNCONFIRMED_PATH, SESSION_COOKIE_PATTERN } from './routes';
 import { loginSchema } from './schema';
 
 export type LoginState = { error: string | null; email: string };
@@ -36,12 +37,41 @@ export async function loginAction(_previous: LoginState, formData: FormData): Pr
   redirect(safeNextPath(formData.get('next')));
 }
 
+/** Cierre local seguro: elimina las cookies de sesion de esta solicitud aunque Auth haya fallado. */
+async function clearLocalSession(): Promise<void> {
+  try {
+    const store = await cookies();
+    for (const { name } of store.getAll()) {
+      if (!SESSION_COOKIE_PATTERN.test(name)) continue;
+      try {
+        store.delete(name);
+      } catch {
+        // Un fallo al borrar una cookie no debe impedir borrar el resto ni redirigir.
+      }
+    }
+  } catch {
+    // Sin almacen de cookies disponible solo queda redirigir con el aviso.
+  }
+}
+
+/**
+ * Cierra la sesion de este navegador. Solo un `signOut` sin error confirma la revocacion remota
+ * (redirige a /login). Si Auth devuelve un error o lanza una excepcion, la revocacion NO esta
+ * confirmada: se limpian las cookies locales y se redirige con un aviso fijo (nunca el error).
+ * Si ademas el borrado local falla, /login lo detecta (siguen las cookies de sesion) y en vez de
+ * redirigir al panel avisa de que la sesion NO se cerro y ofrece reintentar.
+ */
 export async function logoutAction(): Promise<void> {
+  let confirmed = false;
   try {
     const supabase = await createClient();
-    await supabase.auth.signOut({ scope: 'local' });
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    confirmed = !error;
   } catch {
-    // Aunque Auth falle, se vuelve a /login; las cookies locales se limpian en signOut cuando es posible.
+    confirmed = false;
   }
-  redirect(LOGIN_PATH);
+  if (!confirmed) await clearLocalSession();
+
+  // redirect() lanza una excepcion de control de flujo: debe quedar fuera de cualquier try/catch.
+  redirect(confirmed ? LOGIN_PATH : LOGOUT_UNCONFIRMED_PATH);
 }

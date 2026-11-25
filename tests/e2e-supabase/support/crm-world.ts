@@ -2,11 +2,14 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { expect, type Page } from '@playwright/test';
 import { randomBytes, randomUUID } from 'node:crypto';
 
+import { requireLocalSupabaseEnv } from '../../support/local-supabase';
+
 // Soporte propio de crm.spec.ts (TASK-008B). Independiente del soporte de Testing. Crea dos
 // organizaciones con propietario y miembro usando la clave de servicio del stack LOCAL SOLO en
 // la preparacion; las comprobaciones se hacen siempre por la interfaz con sesiones de usuario.
 // Entorno (job `supabase` de CI): SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
-// Si faltan, las pruebas fallan (no se saltan). Las URLs no locales se rechazan.
+// Si faltan, las pruebas fallan (no se saltan). Las URLs no locales se rechazan
+// (tests/support/local-supabase.ts, antes de construir ningun cliente).
 
 export type Org = { id: string; name: string };
 export type CrmUser = { id: string; email: string; password: string };
@@ -19,23 +22,7 @@ export type CrmWorld = {
   ownerB: CrmUser;
 };
 
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 const authOptions = { auth: { persistSession: false, autoRefreshToken: false } } as const;
-
-function requireLocalEnv() {
-  const names = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
-  const missing = names.filter((name) => !process.env[name]?.trim());
-  if (missing.length > 0) {
-    throw new Error(`Faltan variables del stack local de Supabase: ${missing.join(', ')}`);
-  }
-  const url = process.env.SUPABASE_URL as string;
-  if (!LOCAL_HOSTS.has(new URL(url).hostname)) {
-    throw new Error(
-      'Las pruebas E2E crean usuarios y solo pueden ejecutarse contra un stack local.',
-    );
-  }
-  return { url, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY as string };
-}
 
 function must<T>(result: { data: T | null; error: { message: string } | null }, what: string): T {
   if (result.error || result.data === null) {
@@ -45,7 +32,7 @@ function must<T>(result: { data: T | null; error: { message: string } | null }, 
 }
 
 async function buildWorld(): Promise<CrmWorld> {
-  const { url, serviceKey } = requireLocalEnv();
+  const { url, serviceKey } = requireLocalSupabaseEnv();
   const admin: SupabaseClient = createClient(url, serviceKey, authOptions);
   const run = randomUUID().slice(0, 8);
 
