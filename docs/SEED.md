@@ -3,7 +3,7 @@
 Scripts (no son migraciones y no se ejecutan con `supabase db reset`; `[db.seed]` está desactivado en `supabase/config.toml`):
 
 - `supabase/seeds/demo-crm.sql`: el seed (TASK-008C; identidad estable en TASK-010).
-- `supabase/seeds/reconcile-demo-crm.sql`: reconciliación de filas instaladas por la versión anterior del seed (TASK-010, A02-03). **Preparada, no ejecutada en ningún entorno.**
+- `supabase/seeds/reconcile-demo-crm.sql`: reconciliación de filas instaladas por la versión anterior del seed (TASK-010, A02-03). **Ejecutada en Cloud el 2026-11-25 (49 identidades; véase TASK-010B).**
 
 ## Qué crea
 

@@ -47,3 +47,17 @@ Checks locales (RETEST): format, lint, typecheck, build exit 0; unit 691/691; in
 - **Pruebas:** `tests/unit/logout-no-request.test.ts` (4: cookie truncada, almacén vacío, almacén ilegible, sesión válida 2xx). Testing actualizó dos pruebas independent cuyos dobles devolvían `signOut {error:null}` sin simular la petición (`logout-action.test.ts`, `login-logout-failed-retest.test.tsx`), sin relajar expectativas.
 - **Testing: PASS** dirigido: 8 archivos, 119/119 unit de auth/logout; tsc y eslint sin errores. Sin suites completas, integración ni E2E (CI).
 - Git: HEAD `da539c4` antes y después; sin dependencias ni migraciones.
+
+## AUDIT-002-RETEST-3 y prechecks de Cloud (2026-11-25)
+- Codex: **PASS** sobre `7eb5ca3`; los siete hallazgos resueltos. CI 45591123196: ambos jobs en verde.
+- Cloud (`sokguksbymvfcuceswdo`), solo lectura, autorizada por el humano: migraciones aplicadas = 5 (hasta `20261124100000`); pendientes = 5 (`20261125090000`, `090100`, `090200`, `090300`, `100000`), a aplicar por el humano con CLI.
+- Precheck de nombres (equivalente a `name-constraints-precheck.sql`, con escapes `\u` en la clase): **0 filas**.
+- Recuentos: organizaciones 2, clientes 37, técnicos 12, `activity_events` 8 (la columna `seq` aún no existe: quedarán con `seq` nulo tras `…090100`).
+
+## Cloud y cierre de G2/F3 (2026-11-25)
+- Migraciones: las 5 pendientes aplicadas por el humano con CLI; `migration list --linked` 10/10 sincronizadas. Catálogo verificado de solo lectura: restricciones de nombre validadas, `activity_events_seq_required` `NOT VALID`, columna e índice `seq`, `private.demo_fixture_identity`, `private.prevent_unarchive` y triggers `*_prevent_unarchive`.
+- Eventos históricos: 8 con `seq` NULL, conservados.
+- Reconciliación: comprobación 49 `would_map` (0 `already_mapped`, 0 `ambiguous`, 0 `not_found`); aplicada con autorización humana en la misma sesión SQL (`nexovantis.reconcile_apply = 'on'`): 49 `mapped` (Norte 27 clientes + 8 técnicos; Sur 10 + 4). 49 identidades, todas con `record_id` y organización válidos.
+- Seed `demo-crm.sql` re-ejecutado (idempotente, con la transacción implícita del bloque DO y sin `begin/commit` del conector): sin inserciones ni eventos nuevos. Recuentos finales: 37 clientes, 12 técnicos, 8 eventos (8 `archived`, `seq` NULL), 49 identidades.
+- Codex AUDIT-002-RETEST-3: **PASS** sobre `7eb5ca3` (7 hallazgos resueltos); CI 45591123196 en verde (ambos jobs).
+- Decisión humana: **G2 y F3 cerradas**.
