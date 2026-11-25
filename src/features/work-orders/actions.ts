@@ -88,8 +88,12 @@ export async function updateOrderAction(_prev: FormState, formData: FormData): P
 async function run<S extends z.ZodType<{ id: string }>>(
   schema: S,
   raw: Record<string, string>,
-  execute: (ctx: TenantContext, data: z.output<S>) => Promise<ServiceResult<{ changed: boolean }>>,
+  execute: (
+    ctx: TenantContext,
+    data: z.output<S>,
+  ) => Promise<ServiceResult<{ changed: boolean; alreadyCancelled?: boolean }>>,
   successMessage: string,
+  repeatMessage?: string,
 ): Promise<OrderActionState> {
   const ctx = await requireTenant();
   const parsed = schema.safeParse(raw);
@@ -98,7 +102,8 @@ async function run<S extends z.ZodType<{ id: string }>>(
   if (!result.ok) return { status: 'error', message: result.message };
   refresh(parsed.data.id);
   // Un reintento (la orden ya estaba en ese estado) es un éxito sin efecto ni evento nuevo.
-  return { status: 'success', message: successMessage };
+  const repeated = result.data.alreadyCancelled === true && repeatMessage;
+  return { status: 'success', message: repeated ? repeatMessage : successMessage };
 }
 
 export async function assignOrderAction(
@@ -135,5 +140,6 @@ export async function cancelOrderAction(
     pickFields(formData, ['id', 'reason']),
     (ctx, data) => workOrderService.cancel(ctx, data.id, data.reason),
     'Orden cancelada.',
+    'La orden ya estaba cancelada.',
   );
 }

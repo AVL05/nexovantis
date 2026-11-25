@@ -226,10 +226,11 @@ describe('transiciones (BR03, DH-01, DH-02, DH-03)', () => {
     });
     await api.advance(s.memberA, running, 'in_progress');
 
-    expect(await api.cancel(s.memberA, pending)).toBe(true);
-    expect(await api.cancel(s.memberA, assigned, '  Cliente ausente  ')).toBe(true);
-    expect(await api.cancel(s.memberA, running, 'Pieza no disponible')).toBe(true);
-    expect(await api.cancel(s.memberA, running, 'otro motivo')).toBe(false); // reintento: no-op
+    expect(await api.cancel(s.memberA, pending)).toBe('cancelled');
+    expect(await api.cancel(s.memberA, assigned, '  Cliente ausente  ')).toBe('cancelled');
+    expect(await api.cancel(s.memberA, running, 'Pieza no disponible')).toBe('cancelled');
+    // TC-CANC-02: la segunda cancelacion informa que ya estaba cancelada, sin cambios ni eventos.
+    expect(await api.cancel(s.memberA, running, 'otro motivo')).toBe('already_cancelled');
 
     for (const id of [pending, assigned, running]) {
       expect(await api.order(id)).toMatchObject({ status: 'cancelled' });
@@ -244,6 +245,17 @@ describe('transiciones (BR03, DH-01, DH-02, DH-03)', () => {
     });
     expect(await api.events(running)).toHaveLength(4); // creada, asignada, en curso, cancelada
     expect((await api.order(running)).cancellation_reason).toBe('Pieza no disponible');
+  });
+
+  it('segunda cancelacion: already_cancelled sin cambios ni eventos duplicados (TC-CANC-02)', async () => {
+    const id = await api.create(s.memberA, { customer: s.customerA });
+    expect(await api.cancel(s.memberA, id, 'Primera')).toBe('cancelled');
+    const order = await api.order(id);
+    const events = await api.events(id);
+    expect(await api.cancel(s.ownerA, id, 'Segunda')).toBe('already_cancelled');
+    expect(await api.order(id)).toEqual(order);
+    expect(await api.events(id)).toEqual(events);
+    expect(events.filter((e) => e.action === 'cancelled')).toHaveLength(1);
   });
 
   it('no se cancela una orden completada y el motivo larguisimo se rechaza', async () => {
@@ -655,5 +667,59 @@ describe('detalle de eventos de ordenes (DH-08, BR08)', () => {
       `select count(*)::int as n from public.work_orders where title = 'Atomica'`,
     );
     expect(orphan[0].n).toBe(0);
+  });
+});
+
+describe('panel en una sentencia (BR04)', () => {
+  const dash = (user: string, org: string, today = '2026-12-02') =>
+    api.run(user, `select public.work_orders_dashboard($1::uuid, $2::date, 3) as d`, [org, today]);
+
+  it('indicadores y pendientes coherentes, solo de la organizacion propia', async () => {
+    const orgC = await api.su(
+      `select count(*)::int as n from public.work_orders where organization_id = $1`,
+      [s.orgB],
+    );
+    const before = (await dash(s.memberA, s.orgA))[0].d as Record<string, unknown>;
+    const a = await api.create(s.memberA, { customer: s.customerA, date: '2026-11-01' });
+    await api.create(s.memberA, { customer: s.customerA, date: '2026-12-10' });
+    const c = await api.create(s.memberA, { customer: s.customerA, technician: s.technicianA });
+    await api.cancel(s.memberA, c);
+    await api.create(s.memberB, { customer: s.customerB, date: '2020-01-01' });
+
+    const d = (await dash(s.memberA, s.orgA))[0].d as {
+      counts: Record<string, number>;
+      overdue: number;
+      total: number;
+      pending: { id: string; status: string; organization_id: string }[];
+    };
+    const b = before as unknown as typeof d;
+    expect(d.counts.pending).toBe(b.counts.pending + 2);
+    expect(d.counts.cancelled).toBe(b.counts.cancelled + 1);
+    expect(d.total).toBe(b.total + 3);
+    expect(d.total).toBe(Object.values(d.counts).reduce((x, y) => x + y, 0));
+    expect(d.overdue).toBeGreaterThanOrEqual(b.overdue + 1);
+    expect(d.pending.length).toBeLessThanOrEqual(3);
+    expect(d.pending.every((p) => p.status === 'pending' && p.organization_id === s.orgA)).toBe(
+      true,
+    );
+    expect(d.pending.map((p) => p.id)).toContain(a);
+    expect(orgC[0].n).toBeGreaterThan(0);
+    // Otra organizacion pedida con un JWT ajeno: RLS no la cuenta.
+    const other = (await dash(s.memberA, s.orgB))[0].d as typeof d;
+    expect(other.total).toBe(0);
+    expect(other.pending).toEqual([]);
+  });
+
+  it('anon sin acceso y sin SECURITY DEFINER (invoker, search_path fijo)', async () => {
+    await expect(
+      db.asAnon((tx) =>
+        tx.query(`select public.work_orders_dashboard($1::uuid, '2026-12-02'::date, 3)`, [s.orgA]),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    const rows = await api.su(
+      `select prosecdef, proconfig::text as cfg from pg_proc where proname = 'work_orders_dashboard' and pronamespace = 'public'::regnamespace`,
+    );
+    expect(rows[0].prosecdef).toBe(false);
+    expect(String(rows[0].cfg)).toMatch(/search_path=/);
   });
 });

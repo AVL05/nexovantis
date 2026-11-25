@@ -16,7 +16,6 @@ import { buildSearchFilter } from '@/lib/records/search';
 import type { TenantContext } from '@/lib/records/tenant';
 
 import {
-  OPEN_STATUSES,
   ORDER_STATUSES,
   isOrderPriority,
   isOrderStatus,
@@ -334,10 +333,10 @@ export const workOrderService = {
     ctx: TenantContext,
     id: string,
     reason: string | null,
-  ): Promise<ServiceResult<{ changed: boolean }>> {
+  ): Promise<ServiceResult<{ changed: boolean; alreadyCancelled: boolean }>> {
     const { data, error } = await db(ctx).rpc('cancel_work_order', { p_id: id, p_reason: reason });
     if (error) return failure(error);
-    return ok({ changed: data === true });
+    return ok({ changed: data === 'cancelled', alreadyCancelled: data === 'already_cancelled' });
   },
 
   /** Historial de eventos de una orden (más reciente primero), con el detalle de cada cambio. */
@@ -413,37 +412,31 @@ export const workOrderService = {
     );
   },
 
-  /** Indicadores del panel derivados de las filas persistidas (recuentos exactos bajo RLS). */
+  /**
+   * Indicadores y pendientes del panel (BR04) en UNA sentencia SQL (RPC SECURITY INVOKER, bajo RLS
+   * con el JWT del usuario): recuentos y lista salen del mismo snapshot. Los nombres se hidratan
+   * aparte y no afectan a los indicadores.
+   */
   async dashboard(ctx: TenantContext, today: string): Promise<ServiceResult<DashboardData>> {
-    const count = async (apply: (q: Chain) => Chain) => {
-      const base = (
-        db(ctx).from('work_orders').select('id', { count: 'exact', head: true }) as unknown as Chain
-      ).eq('organization_id', ctx.organizationId);
-      return apply(base);
-    };
-    const [byStatus, overdue, pendingRows] = await Promise.all([
-      Promise.all(ORDER_STATUSES.map((status) => count((q) => q.eq('status', status)))),
-      count((q) => q.in('status', OPEN_STATUSES).lt('scheduled_date', today)),
-      (db(ctx).from('work_orders').select('*') as unknown as Chain)
-        .eq('organization_id', ctx.organizationId)
-        .eq('status', 'pending')
-        .order('scheduled_date', { ascending: true })
-        .order('created_at', { ascending: true })
-        .limit(DASHBOARD_PENDING_LIMIT),
-    ]);
-    for (const result of [...byStatus, overdue, pendingRows]) {
-      if (result.error) return failure(result.error);
-    }
+    const { data, error } = await db(ctx).rpc('work_orders_dashboard', {
+      p_organization_id: ctx.organizationId,
+      p_today: today,
+      p_limit: DASHBOARD_PENDING_LIMIT,
+    });
+    if (error) return failure(error);
+    const payload = (data ?? {}) as Row;
+    const rawCounts = (payload.counts ?? {}) as Row;
     const counts = Object.fromEntries(
-      ORDER_STATUSES.map((status, index) => [status, byStatus[index].count ?? 0]),
+      ORDER_STATUSES.map((status) => [status, Number(rawCounts[status] ?? 0)]),
     ) as Record<OrderStatus, number>;
-    const pending = await hydrate(ctx, (pendingRows.data ?? []) as Row[]);
+    const rows = Array.isArray(payload.pending) ? (payload.pending as Row[]) : [];
+    const pending = await hydrate(ctx, rows);
     if (!pending.ok) return pending;
     return ok({
       counts,
       open: counts.pending + counts.assigned + counts.in_progress,
-      total: ORDER_STATUSES.reduce((sum, status) => sum + counts[status], 0),
-      overdue: overdue.count ?? 0,
+      total: Number(payload.total ?? 0),
+      overdue: Number(payload.overdue ?? 0),
       pending: pending.data,
     });
   },

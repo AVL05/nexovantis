@@ -390,7 +390,8 @@ describe('concurrencia real (conexiones distintas)', () => {
       ),
     );
     expect(cancels.every((r) => r.error === null)).toBe(true);
-    expect(cancels.filter((r) => r.data === true)).toHaveLength(1);
+    expect(cancels.filter((r) => r.data === 'cancelled')).toHaveLength(1);
+    expect(cancels.filter((r) => r.data === 'already_cancelled')).toHaveLength(5);
     expect((await eventsOf(id)).map((e) => e.action)).toEqual([
       'created',
       'assigned',

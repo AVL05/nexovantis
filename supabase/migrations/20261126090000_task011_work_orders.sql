@@ -500,9 +500,10 @@ end;
 $$;
 
 -- Cancelar (DH-02): desde pendiente, asignada o en curso; motivo corto opcional guardado en el
--- evento. Ya cancelada: no-op.
+-- evento. Devuelve 'cancelled' si cancelo ahora o 'already_cancelled' si ya lo estaba (no-op: sin
+-- cambios ni eventos duplicados). Una orden completada se rechaza (NX001, por el trigger).
 create function private.cancel_work_order(p_id uuid, p_reason text default null)
-returns boolean
+returns text
 language plpgsql
 security definer
 set search_path = ''
@@ -521,11 +522,11 @@ begin
     raise exception 'orden no encontrada' using errcode = 'NX005';
   end if;
   if v_status = 'cancelled' then
-    return false;
+    return 'already_cancelled';
   end if;
   update public.work_orders set status = 'cancelled', cancellation_reason = v_reason
     where id = p_id and organization_id = v_org;
-  return true;
+  return 'cancelled';
 end;
 $$;
 
@@ -574,7 +575,7 @@ set search_path = ''
 as $$ select private.advance_work_order($1, $2) $$;
 
 create function public.cancel_work_order(p_id uuid, p_reason text default null)
-returns boolean
+returns text
 language sql
 set search_path = ''
 as $$ select private.cancel_work_order($1, $2) $$;
@@ -667,3 +668,46 @@ end;
 $$;
 
 revoke execute on function private.prevent_unarchive() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- 7. Panel (BR04): indicadores y pendientes en UNA sentencia (un unico snapshot en READ COMMITTED)
+-- ---------------------------------------------------------------------------------------------
+-- SECURITY INVOKER: se ejecuta con los privilegios y la RLS del usuario (JWT); sin SECURITY DEFINER
+-- ni service role. El filtro por organizacion es explicito ademas de RLS (otra organizacion devuelve
+-- ceros). Todo sale de una sola sentencia con CTE, asi que recuentos y lista son coherentes.
+create function public.work_orders_dashboard(p_organization_id uuid, p_today date, p_limit int default 8)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  with o as (
+    select * from public.work_orders w where w.organization_id = p_organization_id
+  )
+  select jsonb_build_object(
+    'counts', jsonb_build_object(
+      'pending', count(*) filter (where o.status = 'pending'),
+      'assigned', count(*) filter (where o.status = 'assigned'),
+      'in_progress', count(*) filter (where o.status = 'in_progress'),
+      'completed', count(*) filter (where o.status = 'completed'),
+      'cancelled', count(*) filter (where o.status = 'cancelled')
+    ),
+    'overdue', count(*) filter (
+      where o.status in ('pending', 'assigned', 'in_progress') and o.scheduled_date < p_today
+    ),
+    'total', count(*),
+    'pending', coalesce((
+      select jsonb_agg(to_jsonb(p) order by p.scheduled_date asc, p.created_at asc)
+      from (
+        select * from o where o.status = 'pending'
+        order by o.scheduled_date asc, o.created_at asc
+        limit greatest(coalesce(p_limit, 8), 0)
+      ) p
+    ), '[]'::jsonb)
+  )
+  from o
+$$;
+
+revoke execute on function public.work_orders_dashboard(uuid, date, int) from public, anon;
+grant execute on function public.work_orders_dashboard(uuid, date, int) to authenticated;

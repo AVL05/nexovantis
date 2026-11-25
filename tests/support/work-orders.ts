@@ -56,12 +56,13 @@ export function orderApi(db: TestDb) {
       ]);
       return rows[0].ok as boolean;
     },
+    /** Devuelve el resultado de la RPC: 'cancelled' | 'already_cancelled'. */
     async cancel(user: string, id: string, reason: string | null = null) {
-      const rows = await run(user, `select public.cancel_work_order($1::uuid, $2) as ok`, [
+      const rows = await run(user, `select public.cancel_work_order($1::uuid, $2) as r`, [
         id,
         reason,
       ]);
-      return rows[0].ok as boolean;
+      return rows[0].r as string;
     },
     async update(user: string, id: string, fields: { title: string; description?: string | null }) {
       await run(

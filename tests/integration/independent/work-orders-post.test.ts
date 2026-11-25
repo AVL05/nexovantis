@@ -193,14 +193,14 @@ describe('matriz de transiciones a nivel de tabla (BR03, DH-03): cualquier via d
 
 describe('matriz de operaciones RPC por estado (DH-01, DH-02, DH-03, DH-07)', () => {
   type Op = 'assign-other' | 'assign-same' | 'start' | 'complete' | 'cancel' | 'edit';
-  // Resultado esperado: true/false = cambio / no-op idempotente; cadena = SQLSTATE.
+  // Resultado esperado: true/false = cambio / no-op (assign, advance, edit); 'cancelled' / 'already_cancelled' (cancel, text); otra cadena = SQLSTATE.
   const EXPECTED: Record<Status, Record<Op, boolean | string>> = {
     pending: {
       'assign-other': true,
       'assign-same': true,
       start: 'NX001',
       complete: 'NX001',
-      cancel: true,
+      cancel: 'cancelled',
       edit: true,
     },
     assigned: {
@@ -208,7 +208,7 @@ describe('matriz de operaciones RPC por estado (DH-01, DH-02, DH-03, DH-07)', ()
       'assign-same': false,
       start: true,
       complete: 'NX001',
-      cancel: true,
+      cancel: 'cancelled',
       edit: true,
     },
     in_progress: {
@@ -216,7 +216,7 @@ describe('matriz de operaciones RPC por estado (DH-01, DH-02, DH-03, DH-07)', ()
       'assign-same': 'NX001',
       start: false,
       complete: true,
-      cancel: true,
+      cancel: 'cancelled',
       edit: true,
     },
     completed: {
@@ -232,7 +232,7 @@ describe('matriz de operaciones RPC por estado (DH-01, DH-02, DH-03, DH-07)', ()
       'assign-same': 'NX001',
       start: 'NX001',
       complete: 'NX001',
-      cancel: false,
+      cancel: 'already_cancelled',
       edit: 'NX003',
     },
   };
@@ -271,14 +271,15 @@ describe('matriz de operaciones RPC por estado (DH-01, DH-02, DH-03, DH-07)', ()
     }
     expect(got, `${status}/${op}`).toBe(want);
     const after = await orderRow(id);
-    if (typeof want === 'string') {
+    if (typeof want === 'string' && want.startsWith('NX')) {
       // un rechazo no cambia nada: ni fila ni eventos
       expect(after.status).toBe(before.status);
       expect(after.technician_id).toBe(before.technician_id);
       expect(after.title).toBe(before.title);
       expect(await eventCount(id)).toBe(eventsBefore);
     }
-    if (want === false) expect(await eventCount(id), 'un no-op no emite evento').toBe(eventsBefore);
+    if (want === false || want === 'already_cancelled')
+      expect(await eventCount(id), 'un no-op no emite evento').toBe(eventsBefore);
   });
 
   it('asignar a pendiente la deja asignada con tecnico; no es posible desasignar', async () => {
@@ -322,7 +323,7 @@ describe('matriz de operaciones RPC por estado (DH-01, DH-02, DH-03, DH-07)', ()
     expect((await orderRow(c.id)).status).toBe('pending');
     await cancel(s.ownerA, c.id, 'x'.repeat(200));
     // un reintento con otro motivo no sobrescribe el original (terminal inmutable)
-    expect((await cancel(s.ownerA, c.id, 'otro'))[0].r).toBe(false);
+    expect((await cancel(s.ownerA, c.id, 'otro'))[0].r).toBe('already_cancelled');
     expect((await orderRow(c.id)).cancellation_reason).toBe('x'.repeat(200));
     // motivo fuera de cancelada rechazado por restriccion
     const d = await orderIn('pending');
@@ -969,7 +970,7 @@ describe('entrelazados secuenciales de asignar / crear / archivar', () => {
             : 0,
         );
       } else if (op === 5) {
-        await step(async () => (((await cancel(user, pick(orders)))[0].r as boolean) ? 1 : 0));
+        await step(async () => ((await cancel(user, pick(orders)))[0].r === 'cancelled' ? 1 : 0));
       } else if (op === 6) {
         await step(async () => {
           if (rnd(2)) await archive(user, 'technicians', pick(techs));
@@ -1011,5 +1012,138 @@ describe('entrelazados secuenciales de asignar / crear / archivar', () => {
     );
     expect(details).toBe(after);
     expect(orders.length).toBeGreaterThan(5);
+  });
+});
+
+describe('panel en una sentencia (BR04, RETEST AUDIT-003)', () => {
+  type Dash = {
+    counts: Record<Status, number>;
+    overdue: number;
+    total: number;
+    pending: { id: string; status: string; organization_id: string }[];
+  };
+  const dash = async (user: string, org: string, today = '2026-12-05', limit = 50) =>
+    (
+      await q(user, `select public.work_orders_dashboard($1::uuid,$2::date,$3::int) as d`, [
+        org,
+        today,
+        limit,
+      ])
+    )[0].d as Dash;
+
+  it('indicadores y pendientes coinciden exactamente con las filas de la organizacion', async () => {
+    const cust = await newCustomer(s.orgA);
+    await create(s.ownerA, cust);
+    await orderIn('assigned');
+    await orderIn('completed');
+    await orderIn('cancelled');
+    await orderIn('pending', s.orgB, s.ownerB);
+    const d = await dash(s.ownerA, s.orgA);
+    const rows = await su(
+      `select status, count(*)::int as n,
+              count(*) filter (where status in ('pending','assigned','in_progress') and scheduled_date < '2026-12-05')::int as od
+         from public.work_orders where organization_id = $1 group by status`,
+      [s.orgA],
+    );
+    for (const st of STATUSES) {
+      expect(d.counts[st], st).toBe(Number(rows.find((r) => r.status === st)?.n ?? 0));
+    }
+    expect(d.total).toBe(rows.reduce((x, r) => x + Number(r.n), 0));
+    expect(d.total).toBe(STATUSES.reduce((x, st) => x + d.counts[st], 0));
+    expect(d.overdue).toBe(rows.reduce((x, r) => x + Number(r.od), 0));
+    const pend = await su(
+      `select id from public.work_orders where organization_id = $1 and status = 'pending'`,
+      [s.orgA],
+    );
+    expect(d.pending.map((p) => p.id).sort()).toEqual(pend.map((p) => String(p.id)).sort());
+    expect(d.pending).toHaveLength(d.counts.pending);
+  });
+
+  it('organizacion ajena: ceros y lista vacia; el limite se respeta', async () => {
+    const cust = await newCustomer(s.orgA);
+    for (let i = 0; i < 3; i++) await create(s.ownerA, cust);
+    const other = await dash(s.ownerB, s.orgA);
+    expect(other.total).toBe(0);
+    expect(Object.values(other.counts).every((n) => n === 0)).toBe(true);
+    expect(other.pending).toEqual([]);
+    expect(other.overdue).toBe(0);
+    const own = await dash(s.ownerA, s.orgA, '2026-12-05', 2);
+    expect(own.pending).toHaveLength(2);
+    expect(own.counts.pending).toBeGreaterThan(2);
+    const none = await dash(s.ownerA, s.orgA, '2026-12-05', 0);
+    expect(none.pending).toEqual([]);
+  });
+
+  it('cancelar sale de pendientes y entra en canceladas en el mismo snapshot (TC-CANC-04)', async () => {
+    const before = await dash(s.ownerA, s.orgA);
+    const { id } = await orderIn('pending');
+    const mid = await dash(s.ownerA, s.orgA);
+    expect(mid.pending.map((p) => p.id)).toContain(id);
+    expect(mid.counts.pending).toBe(before.counts.pending + 1);
+    expect(await cancel(s.ownerA, id, 'x')).toEqual([{ r: 'cancelled' }]);
+    const after = await dash(s.ownerA, s.orgA);
+    expect(after.pending.map((p) => p.id)).not.toContain(id);
+    expect(after.counts.pending).toBe(before.counts.pending);
+    expect(after.counts.cancelled).toBe(before.counts.cancelled + 1);
+    expect(after.total).toBe(before.total + 1);
+    // la segunda cancelacion no altera el panel
+    expect(await cancel(s.ownerA, id, 'y')).toEqual([{ r: 'already_cancelled' }]);
+    expect(await dash(s.ownerA, s.orgA)).toEqual(after);
+  });
+
+  it('funcion SECURITY INVOKER, search_path fijo, solo authenticated, anon rechazado, sentencia unica', async () => {
+    const f = (
+      await su(
+        `select p.prosecdef, p.provolatile, l.lanname, p.proconfig::text as cfg, p.prosrc,
+                has_function_privilege('anon', p.oid, 'execute') as anon_x,
+                has_function_privilege('authenticated', p.oid, 'execute') as auth_x
+           from pg_proc p join pg_language l on l.oid = p.prolang
+          where p.proname = 'work_orders_dashboard' and p.pronamespace = 'public'::regnamespace`,
+      )
+    )[0];
+    expect(f.prosecdef).toBe(false);
+    expect(f.lanname).toBe('sql');
+    expect(String(f.cfg)).toMatch(/search_path=\\"\\"/);
+    expect(f.anon_x).toBe(false);
+    expect(f.auth_x).toBe(true);
+    // una unica sentencia SQL: un solo SELECT final, sin separadores de sentencias
+    expect(String(f.prosrc).trim().replace(/;\s*$/, '')).not.toContain(';');
+    expect(
+      await code(
+        db.asAnon((tx) =>
+          tx.query(`select public.work_orders_dashboard($1::uuid,'2026-12-05'::date,3)`, [s.orgA]),
+        ),
+      ),
+    ).toBe('42501');
+  });
+
+  it('las demas RPC conservan su contrato (assign/advance siguen devolviendo boolean)', async () => {
+    const { id } = await orderIn('assigned');
+    const t = await newTech(s.orgA);
+    expect((await assign(s.ownerA, id, t))[0].r).toBe(true);
+    expect((await advance(s.ownerA, id, 'in_progress'))[0].r).toBe(true);
+    expect((await advance(s.ownerA, id, 'in_progress'))[0].r).toBe(false);
+    const types = await su(
+      `select proname, pg_get_function_result(oid) as res from pg_proc
+        where pronamespace = 'public'::regnamespace
+          and proname in ('assign_work_order','advance_work_order','cancel_work_order','update_work_order','create_work_order')`,
+    );
+    const res = Object.fromEntries(types.map((r) => [r.proname, r.res]));
+    expect(res.cancel_work_order).toBe('text');
+    expect(res.assign_work_order).toBe('boolean');
+    expect(res.advance_work_order).toBe('boolean');
+  });
+
+  it('cancelar completada sigue rechazada (NX001) y cancelar dos veces no duplica eventos', async () => {
+    const done = await orderIn('completed');
+    const ev = await eventCount(done.id);
+    expect(await code(cancel(s.ownerA, done.id, 'x'))).toBe('NX001');
+    expect(await eventCount(done.id)).toBe(ev);
+    const c = await orderIn('assigned');
+    await cancel(s.ownerA, c.id, 'a');
+    const evC = await eventCount(c.id);
+    expect((await cancel(s.ownerA, c.id, 'b'))[0].r).toBe('already_cancelled');
+    expect(await eventCount(c.id)).toBe(evC);
+    expect((await orderRow(c.id)).cancellation_reason).toBe('a');
   });
 });
