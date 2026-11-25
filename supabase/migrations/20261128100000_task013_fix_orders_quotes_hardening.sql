@@ -9,15 +9,15 @@
 --         si el id pudiera reescribirse esos vinculos quedarian colgando. Trigger BEFORE UPDATE.
 --         Error 23000 (el mismo SQLSTATE que el resto de inmutabilidades de la tabla). El trigger de la
 --         tabla work_orders_guard se ejecuta ANTES (orden alfabetico) y conserva sus errores NX001/NX003.
---  G4-03  Aceptar un presupuesto solo es valido si (a) tiene al menos un concepto y (b) su orden fue
---         creada POR LA ACEPTACION en la misma transaccion. Se verifica sobre datos que el llamador no
---         controla como autorizacion unica: la fila 'created' de activity_events de esa orden (tabla
---         inmutable, escrita solo por el trigger de la orden con el mismo actor) debe haber sido
---         insertada por la transaccion en curso (xmin = xid de la transaccion actual). Una orden
---         preexistente o ya vinculada a otro presupuesto se rechaza aunque se escriba por SQL de
---         administracion, sin pasar por accept_quote. No se usa ninguna variable de sesion (GUC).
---         Limite conocido: un SAVEPOINT / subtransaccion hace que xmin sea el de la subtransaccion y la
---         comprobacion falle CERRADA (rechaza); accept_quote no usa subtransacciones.
+--  G4-03  La orden de un presupuesto la crea EXCLUSIVAMENTE la propia transicion draft->accepted: el
+--         trigger BEFORE UPDATE quotes_accept_create_order (unico creador) valida >=1 concepto (NX016),
+--         crea la orden con private.create_work_order (id generado por la BD, mismo contenido que
+--         produce accept_quote) y asigna new.order_id. Cualquier order_id suministrado por el llamador
+--         se RECHAZA (23503); nunca se vincula una orden existente ni creada por otra via, tambien en
+--         escrituras administrativas multi-sentencia. Sin xmin ni variables de sesion. accept_quote
+--         solo bloquea (FOR UPDATE), comprueba estado y hace el UPDATE; es idempotente como antes.
+--         El trigger se llama "quotes_accept_create_order" para ejecutarse ANTES de quotes_guard (orden
+--         alfabetico), que despues valida cliente/organizacion de la orden y deriva los totales.
 --  Traza  private.quote_label truncaba a 4 digitos a partir de PRE-10000 (lpad recorta). Se reemplaza
 --         con la misma firma, privilegios (CREATE OR REPLACE los conserva) y search_path vacio; los
 --         numeros < 10000 siguen siendo PRE-0001... Las ordenes no tienen etiqueta en SQL.
@@ -48,51 +48,99 @@ create trigger work_orders_prevent_id_change
 -- ---------------------------------------------------------------------------------------------
 -- 2. G4-03: integridad de la aceptacion de presupuestos
 -- ---------------------------------------------------------------------------------------------
-create function private.quotes_guard_accept()
+create function private.quotes_accept_create_order()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_org uuid;
+  v_sub bigint;
+  v_tax bigint;
+  v_description text;
+  v_rows bigint;
 begin
-  if not exists (
-    select 1 from public.quote_items i
-      where i.quote_id = new.id and i.organization_id = new.organization_id
-  ) then
+  if new.status = 'accepted' and auth.uid() is null then
+    raise exception 'la decision requiere un usuario autenticado' using errcode = '23000';
+  end if;
+  if new.status <> 'accepted' then
+    -- Rechazo o edicion de borrador: nunca llevan orden.
+    if new.order_id is not null then
+      raise exception 'un presupuesto no aceptado no puede tener orden' using errcode = '23503';
+    end if;
+    return new;
+  end if;
+  select coalesce(sum(i.subtotal_cents), 0), coalesce(sum(i.tax_cents), 0), count(*)
+    into v_sub, v_tax, v_rows
+    from public.quote_items i
+    where i.quote_id = new.id and i.organization_id = new.organization_id;
+  if v_rows = 0 then
     raise exception 'un presupuesto sin conceptos no se puede aceptar' using errcode = 'NX016';
   end if;
-
-  -- La orden debe haber sido CREADA por esta transaccion (acceptance): su evento 'created' lo escribio
-  -- el trigger de la orden en la transaccion en curso y con el actor actual. Una orden preexistente
-  -- (de cualquier presupuesto o creada de forma independiente) no cumple esta condicion.
-  if new.order_id is null or not exists (
-    select 1
-      from public.work_orders w
-      join public.activity_events e
-        on e.organization_id = w.organization_id
-       and e.entity_type = 'work_order'
-       and e.entity_id = w.id
-       and e.action = 'created'
-     where w.id = new.order_id
-       and w.organization_id = new.organization_id
-       and w.customer_id = new.customer_id
-       and e.actor_id = auth.uid()
-       and e.xmin::text::bigint = (pg_current_xact_id()::text::bigint % 4294967296)
-  ) then
-    raise exception 'la orden enlazada debe haberse creado en la propia aceptacion del presupuesto'
+  -- Solo la propia transicion asigna la orden: nunca el llamador.
+  if new.order_id is not null then
+    raise exception 'la orden de un presupuesto la crea su aceptacion y no se puede suministrar'
       using errcode = '23503';
   end if;
+  v_org := private.require_org();
+  if new.organization_id <> v_org then
+    raise exception 'el presupuesto pertenece a otra organizacion' using errcode = '23503';
+  end if;
+
+  v_description := coalesce(new.description || E'
+
+', '')
+    || 'Origen: presupuesto ' || private.quote_label(new.number)
+    || '. Importe total (IVA incluido): ' || private.format_cents(v_sub + v_tax) || ' EUR.';
+
+  new.order_id := private.create_work_order(
+    gen_random_uuid(), new.customer_id, new.title, v_description, 'normal',
+    (now() at time zone 'Europe/Madrid')::date, null
+  );
   return new;
 end;
 $$;
-revoke execute on function private.quotes_guard_accept() from public, anon, authenticated;
+revoke execute on function private.quotes_accept_create_order() from public, anon, authenticated;
 
--- "quotes_guard_accept" > "quotes_guard": se ejecuta despues de las validaciones y totales del guard.
-create trigger quotes_guard_accept
+create trigger quotes_accept_create_order
   before update on public.quotes
   for each row
-  when (old.status = 'draft' and new.status = 'accepted')
-  execute function private.quotes_guard_accept();
+  when (old.status = 'draft' and (new.status = 'accepted' or new.order_id is not null))
+  execute function private.quotes_accept_create_order();
+
+-- accept_quote (CREATE OR REPLACE: misma firma, retorno, errores y privilegios). La orden la crea el
+-- trigger anterior; aqui solo se bloquea, se resuelve idempotencia/rechazo y se lee la orden generada.
+create or replace function private.accept_quote(p_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_org uuid := private.require_org();
+  v_q public.quotes%rowtype;
+  v_order uuid;
+begin
+  select * into v_q from public.quotes q
+    where q.id = p_id and q.organization_id = v_org for update;
+  if not found then
+    raise exception 'presupuesto no encontrado' using errcode = 'NX010';
+  end if;
+  if v_q.status = 'accepted' then
+    return v_q.order_id;
+  end if;
+  if v_q.status = 'rejected' then
+    raise exception 'el presupuesto ya fue rechazado' using errcode = 'NX012';
+  end if;
+
+  update public.quotes
+    set status = 'accepted', decided_by = auth.uid(), decided_at = now()
+    where id = v_q.id and organization_id = v_org
+    returning order_id into v_order;
+  return v_order;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------------------------
 -- 3. Trazabilidad: PRE-<n> sin truncar a partir de 10000

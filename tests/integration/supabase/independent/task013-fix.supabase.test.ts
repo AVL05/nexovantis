@@ -288,7 +288,7 @@ describe('G4-03 con PostgREST y JWT reales', () => {
       'presupuesto',
     ) as { status: string; order_id: string | null };
 
-  it('accept_quote funciona con la comprobacion de xmin en PostgreSQL real, es idempotente y una sola orden aunque se acepte en paralelo', async () => {
+  it('accept_quote (trigger de aceptacion) funciona en PostgreSQL real, es idempotente y una sola orden aunque se acepte en paralelo', async () => {
     const id = await quote(2);
     const results = await Promise.all(
       Array.from({ length: 5 }, (_, i) =>

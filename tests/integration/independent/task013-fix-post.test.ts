@@ -405,7 +405,10 @@ describe('G4-03 independiente: bordes de la guarda de aceptacion', () => {
     expect((await quote(q)).status).toBe('draft');
   });
 
-  it('dos presupuestos no pueden compartir una orden creada en la misma transaccion (UNIQUE, 23505)', async () => {
+  it('dos presupuestos no pueden compartir una orden creada en la misma transaccion (23503: el trigger rechaza antes que UNIQUE)', async () => {
+    // Antes de G4-03 (xmin) esto llegaba al indice UNIQUE (23505). Ahora cualquier order_id suministrado
+    // se rechaza en el trigger de aceptacion (23503), que se ejecuta antes de la comprobacion del indice.
+    // El indice sigue existiendo como defensa en profundidad (se comprueba abajo).
     const q1 = await createQuote(s.ownerA, s.customerA);
     const q2 = await createQuote(s.ownerA, s.customerA);
     await failsWith(
@@ -413,10 +416,15 @@ describe('G4-03 independiente: bordes de la guarda de aceptacion', () => {
         const o = await tx.query<Row>(`select public.accept_quote($1::uuid) as id`, [q1]);
         await tx.query(acceptSql, [String(o.rows[0].id), s.ownerA, q2]);
       }),
-      '23505',
+      '23503',
     );
     expect((await quote(q1)).status).toBe('draft'); // la transaccion entera se revirtio
     expect((await quote(q2)).status).toBe('draft');
+    const idx = await su(
+      `select 1 from pg_constraint where conrelid = 'public.quotes'::regclass
+        and conname = 'quotes_order_id_key' and contype = 'u'`,
+    );
+    expect(idx).toHaveLength(1);
   });
 
   it('sin actor (claims vacios) no se acepta por SQL: 23000', async () => {
@@ -452,6 +460,240 @@ describe('G4-03 independiente: bordes de la guarda de aceptacion', () => {
     const n0 = (await su(`select count(*)::int as n from public.work_orders`))[0].n as number;
     await failsWith(run(s.ownerA, `select public.accept_quote($1::uuid) as id`, [empty]), 'NX016');
     expect((await su(`select count(*)::int as n from public.work_orders`))[0].n).toBe(n0);
+  });
+});
+
+describe('G4-03 / FIX-2 independiente: la aceptacion crea EXACTAMENTE la orden (trigger quotes_accept_create_order)', () => {
+  const orderCount = async () =>
+    (await su(`select count(*)::int as n from public.work_orders`))[0].n as number;
+  const orderEvents = async () =>
+    (
+      await su(
+        `select count(*)::int as n from public.activity_events where entity_type = 'work_order'`,
+      )
+    )[0].n as number;
+  const snapshot = async () => ({ orders: await orderCount(), events: await orderEvents() });
+  const quoteFull = async (id: string) =>
+    (await su(`select * from public.quotes where id = $1`, [id]))[0];
+  const orderShape = async (id: string) =>
+    (
+      await su(
+        `select organization_id, customer_id, title, priority, status, technician_id, scheduled_date::text as scheduled_date
+           from public.work_orders where id = $1`,
+        [id],
+      )
+    )[0];
+  const adminAccept = (user: string, id: string, extra = '') =>
+    asAdmin(user, (tx) =>
+      tx.query(
+        `update public.quotes set status = 'accepted', decided_by = $1::uuid ${extra} where id = $2::uuid`,
+        [user, id],
+      ),
+    );
+
+  it('accept_quote: una orden con cliente, organizacion, actor, titulo, descripcion PRE-n e importe; un unico evento por entidad; idempotente', async () => {
+    const q = await createQuote(s.memberA, s.customerA);
+    const before = await snapshot();
+    const order = String(
+      (await run(s.memberA, `select public.accept_quote($1::uuid) as id`, [q]))[0].id,
+    );
+    const qr = await quoteFull(q);
+    expect(qr).toMatchObject({
+      status: 'accepted',
+      order_id: order,
+      decided_by: s.memberA,
+      total_cents: 12100,
+    });
+    expect(await snapshot()).toEqual({ orders: before.orders + 1, events: before.events + 1 });
+    const [o] = await su(`select * from public.work_orders where id = $1`, [order]);
+    expect(o).toMatchObject({
+      organization_id: s.orgA,
+      customer_id: s.customerA,
+      title: 'Presupuesto T13',
+      priority: 'normal',
+      status: 'pending',
+      technician_id: null,
+      description: `Origen: presupuesto PRE-${String(qr.number).padStart(4, '0')}. Importe total (IVA incluido): 121,00 EUR.`,
+    });
+    const ev = await su(
+      `select actor_id, action from public.activity_events where entity_type = 'work_order' and entity_id = $1`,
+      [order],
+    );
+    expect(ev).toEqual([{ actor_id: s.memberA, action: 'created' }]);
+    // Segunda aceptacion (otro actor): misma orden, sin orden ni eventos nuevos.
+    const after = await snapshot();
+    const again = String(
+      (await run(s.ownerA, `select public.accept_quote($1::uuid) as id`, [q]))[0].id,
+    );
+    expect(again).toBe(order);
+    expect(await snapshot()).toEqual(after);
+    expect(
+      (
+        await su(
+          `select count(*)::int as n from public.activity_events where entity_type = 'quote' and entity_id = $1 and action = 'accepted'`,
+          [q],
+        )
+      )[0].n,
+    ).toBe(1);
+  });
+
+  it('UPDATE administrativo a accepted SIN order_id: orden NUEVA equivalente a la de accept_quote; no reutiliza una orden independiente de la misma transaccion', async () => {
+    const viaApi = await createQuote(s.ownerA, s.customerA);
+    const viaSql = await createQuote(s.ownerA, s.customerA);
+    const apiOrder = String(
+      (await run(s.ownerA, `select public.accept_quote($1::uuid) as id`, [viaApi]))[0].id,
+    );
+    const before = await orderCount();
+    let independent = '';
+    await asAdmin(s.ownerA, async (tx) => {
+      const o = await tx.query<Row>(
+        `select public.create_work_order(gen_random_uuid(), $1::uuid, 'Independiente', null, 'normal', '2026-12-01'::date, null) as id`,
+        [s.customerA],
+      );
+      independent = String(o.rows[0].id);
+      await tx.query(
+        `update public.quotes set status = 'accepted', decided_by = $1::uuid where id = $2::uuid`,
+        [s.ownerA, viaSql],
+      );
+    });
+    const linked = String((await quote(viaSql)).order_id);
+    expect(linked).not.toBe(independent);
+    expect(linked).not.toBe(apiOrder);
+    expect(await orderCount()).toBe(before + 2); // la independiente + la generada por la aceptacion
+    expect(await orderShape(linked)).toEqual(await orderShape(apiOrder));
+    const desc = async (id: string) =>
+      String(
+        (await su(`select description from public.work_orders where id = $1`, [id]))[0].description,
+      );
+    const label = async (id: string) =>
+      `PRE-${String((await quoteFull(id)).number).padStart(4, '0')}`;
+    expect((await desc(linked)).replace(await label(viaSql), 'PRE-X')).toBe(
+      (await desc(apiOrder)).replace(await label(viaApi), 'PRE-X'),
+    );
+    // La orden independiente sigue sin vinculo con ningun presupuesto.
+    expect(
+      (
+        await su(`select count(*)::int as n from public.quotes where order_id = $1`, [independent])
+      )[0].n,
+    ).toBe(0);
+  });
+
+  it('order_id suministrado en cualquier transicion de un borrador (accepted, rejected, draft): rechazo sin orden huerfana; en un aceptado NX011', async () => {
+    const q = await createQuote(s.ownerA, s.customerA);
+    const other = await orders.create(s.ownerA, { customer: s.customerA });
+    const before = await snapshot();
+    await failsWith(adminAccept(s.ownerA, q, `, order_id = '${other}'::uuid`), '23503');
+    await failsWith(
+      asAdmin(s.ownerA, (tx) =>
+        tx.query(
+          `update public.quotes set status = 'rejected', decided_by = $1::uuid, order_id = $2::uuid where id = $3::uuid`,
+          [s.ownerA, other, q],
+        ),
+      ),
+      '23503',
+    );
+    await failsWith(
+      asAdmin(s.ownerA, (tx) =>
+        tx.query(`update public.quotes set order_id = $1::uuid where id = $2::uuid`, [other, q]),
+      ),
+      '23503',
+    );
+    expect(await quote(q)).toMatchObject({ status: 'draft', order_id: null });
+    expect(await snapshot()).toEqual(before);
+    await run(s.ownerA, `select public.accept_quote($1::uuid)`, [q]);
+    await failsWith(
+      asAdmin(s.ownerA, (tx) =>
+        tx.query(`update public.quotes set order_id = null where id = $1::uuid`, [q]),
+      ),
+      'NX011',
+    );
+  });
+
+  it('rollback total: si falla una guarda posterior a la creacion de la orden no queda orden, evento ni cambio de estado', async () => {
+    const q = await createQuote(s.ownerA, s.customerA);
+    const before = await snapshot();
+    const quoteEvents = async () =>
+      (
+        await su(`select count(*)::int as n from public.activity_events where entity_id = $1`, [q])
+      )[0].n as number;
+    const qe = await quoteEvents();
+    // quotes_guard (posterior al trigger de aceptacion) rechaza el cambio de titulo: NX011.
+    await failsWith(adminAccept(s.ownerA, q, `, title = 'Otro titulo'`), 'NX011');
+    // decided_by distinto del actor: 23000.
+    await failsWith(
+      asAdmin(s.ownerA, (tx) =>
+        tx.query(
+          `update public.quotes set status = 'accepted', decided_by = $1::uuid where id = $2::uuid`,
+          [s.memberA, q],
+        ),
+      ),
+      '23000',
+    );
+    // Un fallo posterior en la misma transaccion revierte la aceptacion ya hecha.
+    await failsWith(
+      asAdmin(s.ownerA, async (tx) => {
+        await tx.query(`select public.accept_quote($1::uuid)`, [q]);
+        await tx.query(`select 1/0`);
+      }),
+      '22012',
+    );
+    expect(await quote(q)).toMatchObject({ status: 'draft', order_id: null });
+    expect(await snapshot()).toEqual(before);
+    expect(await quoteEvents()).toBe(qe);
+  });
+
+  it('presupuesto vacio: NX016 por accept_quote y por UPDATE administrativo, sin orden ni cambios', async () => {
+    const empty = await createQuote(s.ownerA, s.customerA, false);
+    const before = await snapshot();
+    await failsWith(run(s.ownerA, `select public.accept_quote($1::uuid)`, [empty]), 'NX016');
+    await failsWith(adminAccept(s.ownerA, empty), 'NX016');
+    expect(await quote(empty)).toMatchObject({ status: 'draft', order_id: null });
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('sin actor o con un actor de otra organizacion el UPDATE administrativo no genera orden', async () => {
+    const q = await createQuote(s.ownerA, s.customerA);
+    const before = await snapshot();
+    await failsWith(
+      su(`update public.quotes set status = 'accepted', decided_by = $1 where id = $2`, [
+        s.ownerA,
+        q,
+      ]),
+      '23000',
+    );
+    await failsWith(adminAccept(s.ownerB, q), '23503');
+    await failsWith(run(s.ownerB, `select public.accept_quote($1::uuid)`, [q]), 'NX010');
+    expect(await quote(q)).toMatchObject({ status: 'draft', order_id: null });
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('permisos: trigger sin EXECUTE para public/anon/authenticated, SECURITY DEFINER, search_path vacio; accept_quote conserva privilegios; sin xmin ni GUC; sin UPDATE directo', async () => {
+    const [f] = await su(
+      `select has_function_privilege('public', p.oid, 'execute') as pub,
+              has_function_privilege('anon', p.oid, 'execute') as anon,
+              has_function_privilege('authenticated', p.oid, 'execute') as auth,
+              p.prosecdef, p.proconfig, pg_get_functiondef(p.oid) as def
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private' and p.proname = 'quotes_accept_create_order'`,
+    );
+    expect(f).toMatchObject({ pub: false, anon: false, auth: false, prosecdef: true });
+    expect(String(f.proconfig)).toContain('search_path=""');
+    expect(String(f.def)).not.toMatch(/xmin|set_config|current_setting/i);
+    expect(await su(`select 1 from pg_proc where proname = 'quotes_guard_accept'`)).toHaveLength(0);
+    const [a] = await su(
+      `select has_function_privilege('anon', 'private.accept_quote(uuid)'::regprocedure, 'execute') as anon,
+              has_function_privilege('authenticated', 'private.accept_quote(uuid)'::regprocedure, 'execute') as auth,
+              has_function_privilege('anon', 'public.accept_quote(uuid)'::regprocedure, 'execute') as panon,
+              has_function_privilege('authenticated', 'public.accept_quote(uuid)'::regprocedure, 'execute') as pauth`,
+    );
+    expect(a).toEqual({ anon: false, auth: true, panon: false, pauth: true });
+    const q = await createQuote(s.ownerA, s.customerA);
+    await expect(
+      db.asUser(s.ownerA, (tx) =>
+        tx.query(`update public.quotes set status = 'accepted' where id = $1`, [q]),
+      ),
+    ).rejects.toThrow();
+    expect(await quote(q)).toMatchObject({ status: 'draft', order_id: null });
   });
 });
 

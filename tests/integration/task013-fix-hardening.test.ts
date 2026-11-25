@@ -100,8 +100,8 @@ describe('G4-02: work_orders.id es inmutable', () => {
       `select has_function_privilege('authenticated', 'private.prevent_work_order_id_change()'::regprocedure, 'execute') as a,
               has_function_privilege('anon', 'private.prevent_work_order_id_change()'::regprocedure, 'execute') as n,
               has_function_privilege('public', 'private.prevent_work_order_id_change()'::regprocedure, 'execute') as p,
-              has_function_privilege('authenticated', 'private.quotes_guard_accept()'::regprocedure, 'execute') as qa,
-              has_function_privilege('public', 'private.quotes_guard_accept()'::regprocedure, 'execute') as qp`,
+              has_function_privilege('authenticated', 'private.quotes_accept_create_order()'::regprocedure, 'execute') as qa,
+              has_function_privilege('public', 'private.quotes_accept_create_order()'::regprocedure, 'execute') as qp`,
     );
     expect(rows[0]).toEqual({ a: false, n: false, p: false, qa: false, qp: false });
   });
@@ -156,23 +156,54 @@ describe('G4-03: aceptar solo por accept_quote (SQL de administracion no lo salt
     expect(await quoteRow(second)).toMatchObject({ status: 'draft', order_id: null });
   });
 
-  it('orden creada en la MISMA transaccion por la via normal de ordenes: el enlace por SQL cumple la condicion verificable', async () => {
+  it('orden creada en la MISMA transaccion por otra via: el enlace por SQL se rechaza y no hay vinculo', async () => {
     const quote = await createQuote(s.ownerA, s.customerA);
     await addItem(s.ownerA, quote);
-    await db.asSuperuser(async (tx) => {
-      await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
-        JSON.stringify({ sub: s.ownerA, role: 'authenticated' }),
-      ]);
-      const r = await tx.query<Row>(
-        `select public.create_work_order(gen_random_uuid(), $1::uuid, 'Orden', null, 'normal', '2026-12-01'::date, null) as id`,
-        [s.customerA],
-      );
-      await tx.query(
-        `update public.quotes set status = 'accepted', order_id = $1::uuid, decided_by = $2::uuid where id = $3::uuid`,
-        [String(r.rows[0].id), s.ownerA, quote],
-      );
-    });
-    expect((await quoteRow(quote)).status).toBe('accepted');
+    await failsWith(
+      db.asSuperuser(async (tx) => {
+        await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
+          JSON.stringify({ sub: s.ownerA, role: 'authenticated' }),
+        ]);
+        const r = await tx.query<Row>(
+          `select public.create_work_order(gen_random_uuid(), $1::uuid, 'Orden', null, 'normal', '2026-12-01'::date, null) as id`,
+          [s.customerA],
+        );
+        await tx.query(
+          `update public.quotes set status = 'accepted', order_id = $1::uuid, decided_by = $2::uuid where id = $3::uuid`,
+          [String(r.rows[0].id), s.ownerA, quote],
+        );
+      }),
+      '23503',
+    );
+    expect(await quoteRow(quote)).toMatchObject({ status: 'draft', order_id: null });
+  });
+
+  it('UPDATE directo a accepted SIN order_id genera una orden nueva con el contenido de accept_quote', async () => {
+    const quote = await createQuote(s.ownerA, s.customerA);
+    await addItem(s.ownerA, quote);
+    await suAs(
+      s.ownerA,
+      `update public.quotes set status = 'accepted', decided_by = $1 where id = $2`,
+      [s.ownerA, quote],
+    );
+    const q = await quoteRow(quote);
+    expect(q.status).toBe('accepted');
+    const [o] = await su(`select customer_id, description from public.work_orders where id = $1`, [
+      q.order_id,
+    ]);
+    expect(o.customer_id).toBe(s.customerA);
+    expect(String(o.description)).toContain('Origen: presupuesto PRE-');
+  });
+
+  it('un presupuesto aceptado no cambia su order_id', async () => {
+    const quote = await createQuote(s.ownerA, s.customerA);
+    await addItem(s.ownerA, quote);
+    await run(s.ownerA, `select public.accept_quote($1::uuid) as id`, [quote]);
+    const other = await orders.create(s.ownerA, { customer: s.customerA });
+    await failsWith(
+      suAs(s.ownerA, `update public.quotes set order_id = $1 where id = $2`, [other, quote]),
+      'NX011',
+    );
   });
 
   it('accept_quote sigue funcionando: orden nueva, enlazada, idempotente y con un unico evento accepted', async () => {

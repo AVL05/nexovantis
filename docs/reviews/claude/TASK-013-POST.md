@@ -181,3 +181,36 @@ Comparacion: `git diff 984a59e c600a31 -- tests/e2e-supabase`. `log()` = region 
 
 ### Archivos de Testing y Git
 Nuevos: tests/integration/independent/task013-fix-post.test.ts, tests/integration/supabase/independent/task013-fix.supabase.test.ts. Modificados (G4-04): tests/e2e-supabase/{activity,inventory,orders,quotes}.spec.ts. No se tocaron src/, migraciones, .github/ ni docs fuera de este informe. Incidente: un `git stash` accidental mio se revirtio de inmediato con `git stash pop` (estado identico, lista de stash vacia).
+
+## TASK-013-FIX-2 / G4-03 (Testing POST dirigido, sobre HEAD 648da09 + cambios sin commit) - 2026-11-25
+
+Veredicto: **BLOCKED** (todo lo verificable en PGlite pasa; falta solo la concurrencia real y PostgREST en el job `supabase` de CI). Sin hallazgos Critical/High/Medium. Modelo solicitado: Sonnet medium (efectivo no observable).
+
+Diff revisado: migracion 20261128100000 (unica en `git diff --name-only HEAD -- supabase/migrations`; la 20261128090000 intacta), docs/ARCHITECTURE.md, tests quotes-db y task013-fix-hardening (Develop). Tests mios: tests/integration/independent/task013-fix-post.test.ts y tests/integration/supabase/independent/task013-fix.supabase.test.ts (solo titulo). Sin `.skip/.only/.todo`, sin aserciones relajadas.
+
+### Matriz verificacion -> evidencia
+| # | Verificacion | Evidencia |
+|---|---|---|
+| 1 | Aceptacion legitima: 1 orden (cliente, org, actor, titulo, descripcion `Origen: presupuesto PRE-000n. Importe total (IVA incluido): 121,00 EUR.`, normal, pending, sin tecnico), 1 evento `created` del actor, 1 evento `accepted`, idempotente | test nuevo "accept_quote: una orden..." + quotes-post, seed-orders-post, quotes-db. Contenido: el trigger usa la misma plantilla que accept_quote de HEAD (suma de conceptos == total_cents por quotes_guard). |
+| 1b | Paralelo | Lectura SQL: accept_quote hace `FOR UPDATE`; el 2.o lee `accepted` y devuelve order_id; UPDATE concurrente directo: WHEN se reevalua sobre la fila bloqueada (old.status=accepted) y quotes_guard da NX012. NO ejecutado (requiere conexiones reales). |
+| 2 | Reutilizacion/enlace: orden existente, de otra org, de otro cliente, de otro actor, de la misma transaccion (caso del FAIL), con SAVEPOINT, INSERT accepted, order_id en draft/rejected, cambio en aceptado (NX011) | task013-fix-post (G4-03 bordes: todos 23503/NX012/NX011) + nuevos "order_id suministrado..." y "UPDATE admin SIN order_id" (orden nueva equivalente, la independiente sigue sin vinculo, +2 ordenes exactas) |
+| 3 | Vacio NX016 por ambos caminos; rollback total | nuevos "presupuesto vacio" y "rollback total" (NX011/23000 tras crear la orden, 1/0 posterior: sin orden, sin eventos, estado draft) |
+| 4 | Permisos | nuevo "permisos": sin EXECUTE public/anon/authenticated, SECURITY DEFINER, search_path vacio, sin xmin/set_config/current_setting, `quotes_guard_accept` inexistente, accept_quote private/public: anon false, authenticated true; UPDATE directo authenticated rechazado; "sin actor/otra org": 23000 / 23503 / NX010 |
+| 5 | Datos existentes | test de migracion aditiva (huella antes/despues identica con aceptado previo + stock) y quote_label; pasa |
+| 6 | Sin xmin/GUC | grep de la migracion: solo aparece en un comentario ("Sin xmin ni variables de sesion"); no en codigo; la funcion se comprueba por pg_get_functiondef |
+| 7 | Regresion F4/F5, G4-01/02 | 13 ficheros, 390 tests OK |
+
+### Tests actualizados (propiedad Testing)
+- task013-fix-post.test.ts:408 "dos presupuestos no comparten orden": 23505 -> 23503. Razon: el trigger rechaza todo `order_id` suministrado (BR05) antes de llegar al indice UNIQUE; el comportamiento nuevo es correcto y es mas estricto. Se mantiene la aserccion estricta de codigo y se comprueba que el UNIQUE `quotes_order_id_key` sigue existiendo (defensa en profundidad).
+- La regresion que permitia enlazar una orden independiente de la misma transaccion ya estaba invertida por Develop en task013-fix-hardening.test.ts (exige 23503); en task013-fix-post.test.ts todos los casos de orden de la misma transaccion exigen 23503 y los cubren. El unico resto de xmin era el titulo de task013-fix.supabase.test.ts:291, ajustado (sin cambio de logica).
+
+### Comandos reales
+- `npx vitest run -c vitest.integration.config.mts` sobre task013-fix-hardening, quotes-db, quotes-calc, quotes-seed, work-orders, seed-orders, independent/{task013-fix-post, quotes-post, work-orders-post, seed-orders-post, activity-order}, inventory-db, inventory-seed: 13 ficheros, 390 tests, exit 0 (antes de mis cambios: 108/109, fallo el 23505 esperado).
+- `npx tsc --noEmit` exit 0; `npx eslint` sobre los 4 tests tocados exit 0; `prettier --check` OK en tests. `docs/ARCHITECTURE.md` falla prettier tambien en HEAD (preexistente, no introducido).
+
+### Hallazgos
+- Informational: la migracion en el working copy tiene finales CRLF (aviso de Git "CRLF will be replaced by LF"); normalizar al commitear. docs/ARCHITECTURE.md:102 describe el diseno correctamente.
+- Informational: el trigger se ejecuta antes de quotes_guard, por lo que la orden se crea y luego se revierte si el guard falla; es correcto por atomicidad de sentencia (verificado en "rollback total"), pero depende de que nadie capture el error sin subtransaccion (imposible en PostgreSQL).
+
+### Pendiente en CI (motivo del BLOCKED)
+`pnpm test:supabase` (job `supabase`): aceptaciones paralelas via PostgREST (task013-fix.supabase.test.ts:291), enlace concurrente y rechazo UPDATE service-role sin actor. No ejecutado en local (sin Docker/Supabase CLI). Regresion completa sobre el SHA objetivo en CI.
