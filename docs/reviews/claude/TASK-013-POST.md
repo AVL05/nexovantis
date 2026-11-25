@@ -97,3 +97,10 @@ Fallo: `inventory.spec.ts:116` (strict mode): tabla de escritorio y lista movil 
 - activity.spec.ts (mismo defecto, en la comprobacion de orden): `.locator('time')` pasa a `.locator('time:visible')`; antes recogia los `time` de ambas representaciones (secuencia duplicada, nunca ordenada).
 - Local: typecheck, eslint y prettier --check OK; `playwright --list` detecta ambos specs. Sin app modificada.
 - Veredicto: PASS dirigido estatico; E2E real BLOCKED por CI (requiere Supabase local) sobre el SHA del nuevo commit.
+
+## RETEST-CI-2 (CI 45651894003, HEAD 7681ec5)
+
+Fallo: `orders.spec.ts:100` (listado): `q=world.run` y `new RegExp(world.run)` coinciden con 6 ordenes, porque inventory/activity/quotes comparten `world.run` y la organizacion A. El "1 NOT RUN" es `orders.spec.ts:127` (cancelar): el fichero usa `mode: 'serial'` y workers=1, por lo que un fallo salta los tests siguientes del mismo describe.
+
+Correccion solo en `tests/e2e-supabase/orders.spec.ts`: clave propia `scenario = OS${world.run}` (beforeAll) en los titulos de las ordenes que crea el spec ("Revision caldera", "Orden a cancelar") y en las 3 busquedas `?q=` y el regex del enlace. Sin `.first()`/`.nth()` nuevos, aserciones sin debilitar (el conteo "una fila completada" y "ninguna cancelada" ahora son sobre datos del escenario). Clientes/tecnicos conservan `world.run` (no se buscan). inventory/activity no se tocan y no pueden contener `OS<run>`; orders.spec no crea datos que ellos cuenten (activity solo asserta por sus etiquetas y orden relativo).
+Local: tsc, eslint, prettier OK; `--list` 82 tests. Veredicto: PASS dirigido estatico; E2E real BLOCKED por CI.

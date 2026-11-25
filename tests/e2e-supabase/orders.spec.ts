@@ -9,8 +9,13 @@ import { getCrmWorld, loginAs, type CrmWorld } from './support/crm-world';
 test.describe.configure({ mode: 'serial' });
 
 let world: CrmWorld;
+// Clave propia de este escenario: world.run lo comparten inventory/activity/quotes (misma
+// organizacion), asi que las busquedas del listado usan este prefijo, presente solo en los
+// titulos de las ordenes que crea este spec.
+let scenario: string;
 test.beforeAll(async () => {
   world = await getCrmWorld();
+  scenario = `OS${world.run}`;
 });
 
 async function createPerson(page: Page, path: '/customers' | '/technicians', name: string) {
@@ -48,7 +53,7 @@ test('flujo demo: cliente, orden, asignar, iniciar, completar, historial y panel
 }) => {
   const customer = `Cliente Orden ${world.run}`;
   const technician = `Técnico Orden ${world.run}`;
-  const title = `Revisión caldera ${world.run}`;
+  const title = `Revisión caldera ${scenario}`;
   await loginAs(page, world.ownerA);
   await createPerson(page, '/customers', customer);
   await createPerson(page, '/technicians', technician);
@@ -101,14 +106,14 @@ test('listado: busqueda, filtros por estado y tecnico, estado vacio y persistenc
   page,
 }) => {
   await loginAs(page, world.memberA);
-  await page.goto(`/orders?q=${encodeURIComponent(world.run)}`);
+  await page.goto(`/orders?q=${encodeURIComponent(scenario)}`);
   await expect(
-    page.getByRole('table').getByRole('link', { name: new RegExp(world.run) }),
+    page.getByRole('table').getByRole('link', { name: new RegExp(scenario) }),
   ).toBeVisible();
 
-  await page.goto(`/orders?q=${encodeURIComponent(world.run)}&estado=completed`);
+  await page.goto(`/orders?q=${encodeURIComponent(scenario)}&estado=completed`);
   await expect(page.getByRole('table').getByText('Completada')).toBeVisible();
-  await page.goto(`/orders?q=${encodeURIComponent(world.run)}&estado=cancelled`);
+  await page.goto(`/orders?q=${encodeURIComponent(scenario)}&estado=cancelled`);
   await expect(page.getByRole('heading', { name: 'No hay órdenes que coincidan' })).toBeVisible();
 
   // Termino hostil: no rompe la consulta.
@@ -129,7 +134,7 @@ test('cancelar con motivo, DH-04 al archivar y aislamiento entre organizaciones'
 }) => {
   const customer = `Cliente Cancel ${world.run}`;
   const technician = `Técnico Cancel ${world.run}`;
-  const title = `Orden a cancelar ${world.run}`;
+  const title = `Orden a cancelar ${scenario}`;
   await loginAs(page, world.ownerA);
   const customerId = await createPerson(page, '/customers', customer);
   const technicianId = await createPerson(page, '/technicians', technician);
