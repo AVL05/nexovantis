@@ -14,11 +14,13 @@
 
 Un módulo completo por fase. Priorizar P0 funcional y desplegable. P1/P2 no comprometen P0 ni la entrega; el humano decide reducir alcance opcional si amenaza la entrega. No aprobar un criterio o puerta con FAIL/BLOCKED. Ramas pequeñas y commits descriptivos, sin force push. Revisar diff y evidencia antes de integrar. Actualizar STATUS.md con resultados reales.
 
-## Estado actual (2026-11-25)
-F0–F3 cerradas. G1 por decisión humana DH-G1, no es PASS de Codex; AUDIT-001 conserva FAIL y riesgos aceptados. G2 cerrada tras AUDIT-002-RETEST-3 PASS, CI 45591123196 y Cloud verificado. Próximo módulo F4 (órdenes y dashboard P0). STATUS.md contiene la evidencia. Se conservan fases, criterios y puertas. Las comprobaciones CLI de F1 son complementarias, no prerrequisitos reabiertos.
+## Estado actual (2026-11-26)
 
-## Registro de pendientes por fase
-Registro histórico de decisiones y pendientes por fase: F1–F3 cerradas; no reabrir tareas resueltas. Comprobaciones pendientes F4–F8 vigentes. Los nombres de tareas futuras son propuestas; el ID definitivo lo asigna Orchestrator. Las decisiones de semántica de negocio (DH-01..DH-08 y DH-13) están en [BUSINESS_RULES.md](BUSINESS_RULES.md).
+F0–F6 cerradas y F7 integrada en `main` mediante el PR #6. [STATUS.md](STATUS.md) recoge la evidencia por SHA y el estado de la regresión. F8 prepara el despliegue y la verificación de la URL pública de producción según [DEPLOYMENT.md](DEPLOYMENT.md). La aceptación final corresponde al responsable de la entrega.
+
+## Registro histórico por fase
+
+Decisiones y comprobaciones previstas al planificar cada fase. Consulta [STATUS.md](STATUS.md) para el cierre vigente y [BUSINESS_RULES.md](BUSINESS_RULES.md) para la semántica aprobada.
 
 ### F1: riesgo residual aceptado por el humano (DH-G1), no verificado
 - Aceptado por el humano, no verificado ni resuelto: validaciones de la CLI y reinicio (`/permissions`, `/status`, `/mcp`, `/context`, `/tasks`, `claude doctor`; complementarias, solo de terminal o no documentadas en Desktop); carga de develop.md tras el reinicio con una invocación trivial; prueba de que las reglas `ask` muestran su diálogo (POST-03, cancelada); DH-12 no ratificada (POST-02).
@@ -55,3 +57,4 @@ Registro histórico de decisiones y pendientes por fase: F1–F3 cerradas; no re
 
 ### F7
 - Regresión final de accesibilidad y responsive (T10) según docs/TESTING_GUIDELINES.md.
+- Lighthouse quedó asignado a la validación de producción de F8 por decisión humana. [TASK-014](reviews/claude/TASK-014.md).

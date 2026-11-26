@@ -1,6 +1,6 @@
 # Arquitectura técnica
 
-Monolito modular Next.js App Router + React + TypeScript estricto. pnpm, Tailwind, shadcn/ui según necesidad, Zod en servidor. Supabase PostgreSQL/Auth y @supabase/ssr. Vercel gratuito si es elegible. Vitest, Playwright, ESLint y GitHub Actions. Versiones estables compatibles, lockfile versionado; se verificarán en F2.
+Monolito modular Next.js App Router con React, TypeScript estricto, Tailwind y Zod. Supabase aporta PostgreSQL, Auth y PostgREST. La aplicación gestiona sesiones mediante `@supabase/ssr`. pnpm fija dependencias mediante el lockfile. Vitest, Playwright y ESLint se ejecutan en GitHub Actions. Vercel Hobby es el destino previsto de la demo si cumple las condiciones del plan.
 
 ## Capas
 src/app (rutas y composición), src/features (dominio por módulo), src/components (UI compartida), src/lib (clientes servidor/navegador y utilidades), supabase/migrations (SQL), tests (unit, integration, e2e, acceptance). Server Actions/Route Handlers validan entrada, identidad y permisos; dominio centraliza reglas. No usar claves elevadas en solicitudes normales.
@@ -17,7 +17,7 @@ Next.js App Router sobre Node.js es el backend propio de Nexovantis; Supabase pr
 - Manejo consistente de errores de validación, autorización, inexistencia y conflictos; no exponer SQL, secretos o detalles internos. Mantener datos sensibles y respuestas personalizadas fuera de cachés compartidas.
 - Validar el backend mediante pruebas de servicios y flujos, aislamiento real con dos usuarios/organizaciones, pruebas directas de API de datos y E2E. Evitar capas vacías y abstracciones genéricas: crear módulos cuando se implementa su funcionalidad.
 
-Esta sección define responsabilidades futuras, no afirma que el backend esté completo. La matriz de roles está ratificada en [ADR-001](adr/ADR-001-roles-rls.md); las decisiones de negocio pendientes se ratifican por separado y no se modifican aquí.
+La matriz de roles está ratificada en [ADR-001](adr/ADR-001-roles-rls.md). El estado de cada fase y su evidencia están en [STATUS.md](STATUS.md).
 
 ## Datos
 P0: organizations, memberships (user/org/role), customers, technicians, work_orders, work_order_events. P1: quotes, quote_items, inventory_items, stock_movements. Toda entidad operativa tiene organization_id; constraints y claves foráneas compuestas o mecanismos equivalentes impiden referencias cruzadas. RLS en tablas expuestas, políticas por operación y membresía. Migraciones reproducibles y seed sintético; probar dos identidades de organizaciones distintas.
@@ -25,10 +25,8 @@ P0: organizations, memberships (user/org/role), customers, technicians, work_ord
 ## Operaciones críticas
 Transacciones PostgreSQL/RPC para aceptar presupuesto y consumir stock; concurrencia, idempotencia, constraints y rollback. Dinero en céntimos enteros o numeric con política explícita. Fechas persistidas con semántica clara y presentación es-ES.
 
-## Decisiones pendientes
-Definir permisos exactos, esquema, estrategia de entornos y versiones en F2/F3 con ADRs cuando haya decisiones de impacto. No confundir esta propuesta con implementación existente.
-
-Pendientes conocidos, todos sin implementar y registrados por fase en [docs/ROADMAP.md](ROADMAP.md): roles y permisos exactos; RLS por operación y membresía; GRANT y exposición de PostgREST además de RLS; endurecimiento de RPC SECURITY DEFINER (search_path, REVOKE a PUBLIC y anon, EXECUTE); política de IVA y redondeo; concurrencia e idempotencia; preflight del entorno local (Docker, WSL, Supabase CLI no verificados). La propiedad de `tests/support/**` no es un pendiente: está definida como compartida en la tabla de propiedad de `tests/` de [docs/TESTING_GUIDELINES.md](TESTING_GUIDELINES.md). Las reglas de negocio ambiguas (DH-01..DH-08 y DH-13) están en docs/BUSINESS_RULES.md.
+## Decisiones y verificación
+Los permisos, RLS y GRANT se definen en las migraciones. La política de IVA y redondeo consta en [TASK-012](reviews/claude/TASK-012.md). La regresión de transacciones e idempotencia usa Supabase local en CI. La configuración y las comprobaciones del entorno público están en [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Stack verificado (F2)
 Versiones exactas instaladas y verificadas en F2 (2026-11-24, Node 24.22.2, pnpm 12.16.1): Next.js 16.4.6 (App Router, Turbopack), React 19.3.1, TypeScript 6.0.3 estricto (TypeScript 7 queda fuera hasta que `typescript-eslint` lo soporte), Tailwind CSS 4.3.5 (`@tailwindcss/postcss`), ESLint 9.39.5 con `eslint-config-next` 16.4.6 (ESLint 10 queda fuera por incompatibilidad de plugins), Prettier 3.10.1, Vitest 5.1.1 con Vite 8.3.8, `@vitejs/plugin-react` 6.3.0, jsdom 31.0.1 y Testing Library, Playwright 1.65.1 (solo Chromium). Alias `@/*` → `src/*`. Fuentes del sistema; sin recursos remotos en build ni runtime.
@@ -36,7 +34,7 @@ Versiones exactas instaladas y verificadas en F2 (2026-11-24, Node 24.22.2, pnpm
 Estructura de F2: `src/app` (layout y página inicial mínima), `src/features`, `src/components` y `src/lib` (en F2 vacíos, con README; en F3 contienen esquemas Zod, `env.ts` y los clientes de Supabase), `tests/unit`, `tests/e2e`, `tests/support` y `.github/workflows/ci.yml`. `test:integration` se añade en F3 (ver la sección siguiente).
 
 ## Modelo de datos F3 (TASK-006)
-Estado: implementado en migraciones y verificado solo en PGlite (PostgreSQL real in-process con un shim de `auth`; no es Supabase). La verificación en Supabase local es el job `supabase` de CI y no se ha ejecutado; Supabase Cloud no se ha usado. La matriz de acceso, la regla de una organización por usuario y DH-04..DH-06 están aprobadas por el humano (TASK-008A y TASK-010); DH-04 y DH-05 se implementan en F4: ver [ADR-001](adr/ADR-001-roles-rls.md).
+Implementado en migraciones y verificado en PGlite y en el stack local de Supabase en CI. La migración del esquema en Supabase Cloud se documenta en [SUPABASE_CLOUD.md](SUPABASE_CLOUD.md). La matriz de acceso, la regla de una organización por usuario y DH-04..DH-06 están aprobadas por el humano (TASK-008A y TASK-010). DH-04 y DH-05 se implementaron en F4. [ADR-001](adr/ADR-001-roles-rls.md).
 
 - Tablas en `public` (`supabase/migrations/`): `organizations`, `memberships` (rol `owner` o `member`; `unique (user_id)`: una organización por usuario), `customers` y `technicians` (con `organization_id`, `archived_at` y `unique (organization_id, id)` para claves compuestas de F4). Sin órdenes, presupuestos ni inventario.
 - Seguridad: RLS en las cuatro tablas, políticas por operación y rol `authenticated`; `anon` sin privilegios; sin DELETE ni TRUNCATE; privilegios por columna para impedir escribir `id`, `organization_id` y marcas de tiempo; `memberships` es de solo lectura para usuarios. Organizaciones y membresías se crean fuera de la app.
@@ -46,7 +44,7 @@ Estado: implementado en migraciones y verificado solo en PGlite (PostgreSQL real
 - Pruebas: `tests/integration/` (PGlite, `pnpm test:integration`), `tests/integration/supabase/` (stack local en CI, `pnpm test:supabase`) y soporte compartido en `tests/support/` (`pglite.ts`, `supabase-shim.sql`, `fixtures.ts`).
 
 ## Autenticación y sesión F3 (TASK-007)
-Estado: implementado. La verificación con Auth real solo se ejecuta en el job `supabase` de CI (`pnpm test:e2e:supabase`); no se ha ejecutado en local ni contra Supabase Cloud.
+El job `supabase` de CI ejecuta `pnpm test:e2e:supabase` con el stack local y Supabase Auth real. [STATUS.md](STATUS.md) recoge las verificaciones previas de CI y el acceso manual contra Cloud.
 
 - `src/proxy.ts` (Next.js 16; sin `middleware.ts`): crea un cliente `@supabase/ssr` por solicitud, refresca la sesión con `getClaims()` y aplica las cookies y las cabeceras anti-caché de `setAll` a la respuesta (POST-07). Redirige a `/login` (307, `private, no-store`, `next` validado) las rutas protegidas sin sesión. Sin variables de Supabase, las rutas públicas siguen funcionando y las protegidas fallan cerradas. No es la única barrera.
 - `src/features/auth/session.ts` (`server-only`): `requireUser()` verifica la sesión contra Auth con `getUser()` (decisión sobre DH-T7-1: una cookie copiada antes del logout deja de autorizar) y redirige a `/login`; `requireMembership()` obtiene organización y rol de `memberships`/`organizations` con el cliente del usuario bajo RLS, nunca de datos del cliente. No se usa `getSession()` para decidir.
@@ -62,7 +60,7 @@ Estado: implementado; verificado con PGlite, pruebas unitarias y E2E local de hu
 - Rutas protegidas `/customers` y `/technicians` (listado paginado de 20 con búsqueda y filtro por estado en `searchParams`, alta, detalle con historial, edición, archivar/restaurar con confirmación).
 
 ## Remediación de AUDIT-002 (TASK-010)
-Estado: implementado y verificado en PGlite y con pruebas unitarias; las suites con Auth/PostgREST reales (`pnpm test:supabase`, `pnpm test:e2e:supabase`) son del job `supabase` de CI y no se han ejecutado en local. Nada se ha aplicado en Cloud ([SUPABASE_CLOUD.md](SUPABASE_CLOUD.md)).
+Verificado con pruebas unitarias, PGlite y el job `supabase` de CI con Auth y PostgREST reales. Las migraciones de TASK-010 y TASK-010B se aplicaron en Cloud al cerrar G2. [Estado y evidencia](STATUS.md).
 
 - Migración `20261125090000_task010_name_constraints.sql` (A02-04): `organizations_name_length`, `customers_name_length` y `technicians_full_name_length` pasan a validar el valor **almacenado**: `char_length <= 200` (puntos de código) y al menos un carácter fuera del conjunto de espacio en blanco de `String.prototype.trim()`. Zod (`z.string().trim().min(1).max(200)`) es equivalente; la BD rechaza con 23514 lo que llegue sin recortar (p. ej. por PostgREST). Falla entera si hay datos que la violen: comprobación previa de solo lectura en `supabase/checks/name-constraints-precheck.sql`.
 - Migración `20261125090100_task010_activity_seq.sql` (A02-05): `activity_events.seq` (bigint, índice único) con valor por defecto de secuencia; la secuencia no se concede a `anon`/`authenticated` y la columna no es escribible por usuarios (solo SELECT de tabla). Los eventos históricos conservan `seq` nulo (su orden entre empates no es reconstruible). `listEntityHistory` ordena por `occurred_at desc, seq desc` sin reordenar en memoria.
@@ -75,7 +73,7 @@ Estado: implementado y verificado en PGlite y con pruebas unitarias; las suites 
 - Pruebas (A02-02): `tests/support/local-supabase.ts` (`assertLocalSupabaseUrl`, `requireLocalSupabaseEnv`) valida que `SUPABASE_URL` sea el stack local antes de construir ningún cliente; lo usan las suites de integración Supabase (también como `setupFile` de `vitest.supabase.config.mts`) y el soporte E2E.
 
 ## Órdenes de servicio y panel (TASK-011, F4)
-Estado: implementado; verificado con PGlite (migración, RLS, RPC, triggers, DH-04/DH-05, seed), pruebas unitarias, `format:check`, `lint`, `typecheck` y `build`. La concurrencia real entre conexiones, PostgREST/Auth reales y el E2E son del job `supabase` de CI y **no se han ejecutado en local**; nada se ha aplicado ni ejecutado en Cloud.
+Verificado con PGlite, pruebas unitarias y el job `supabase` de CI para concurrencia, Auth, PostgREST y E2E. Cloud recibió la migración y el seed de órdenes. [Estado y evidencia](STATUS.md).
 
 - Migración `20261126090000_task011_work_orders.sql`: `public.work_orders` (cliente y técnico con claves foráneas compuestas `(organization_id, id)`; `status`, `priority`, `scheduled_date`, `cancellation_reason`; CHECK de estado/técnico coherentes), RLS por organización y **solo SELECT** para usuarios (sin INSERT/UPDATE/DELETE directos, tampoco por columna). `anon` sin privilegios.
 - Reglas en triggers de la tabla (`private.work_orders_guard`, SECURITY DEFINER, `search_path` vacío): matriz de transiciones sin saltos ni retrocesos (DH-03), reasignación solo en `assigned` (DH-01), cancelación desde pendiente/asignada/en curso con motivo opcional (DH-02), órdenes terminales de solo lectura (DH-07), cliente y técnico activos y de la misma organización, bloqueados con `FOR SHARE` al crear, asignar, reasignar o iniciar. Sin `DELETE`/`TRUNCATE`.
@@ -86,7 +84,7 @@ Estado: implementado; verificado con PGlite (migración, RLS, RPC, triggers, DH-
 - Seed demo de órdenes: `supabase/seeds/demo-orders.sql` (ver [SEED.md](SEED.md)); no ejecutado en Cloud.
 
 ## Inventario y actividad (TASK-013, F6)
-Estado: implementado; verificado con PGlite (migración, RLS, RPC, triggers, idempotencia, consumo con orden, archivado, seed), pruebas unitarias, `lint`, `typecheck` y `build`. La concurrencia real entre conexiones, PostgREST/Auth reales y el E2E (`tests/e2e-supabase/inventory.spec.ts` y `activity.spec.ts`) son del job `supabase` de CI y **no se han ejecutado en local**; nada se ha aplicado ni ejecutado en Cloud.
+Verificado con PGlite, pruebas unitarias y el job `supabase` de CI para concurrencia, Auth, PostgREST y E2E. Cloud recibió las migraciones y el seed de inventario. [Estado y evidencia](STATUS.md).
 
 - Migración `20261128090000_task013_inventory.sql`: `public.inventory_items` (referencia única por organización sin distinguir mayúsculas e inmutable, unidad de lista cerrada, umbral, saldo entero y `stock_status` generado `ok`/`low`/`out`), `public.stock_movements` (inmutable; `kind` entrada/salida/consumo, cantidad 1..1000000, saldo anterior y posterior, orden vinculada, nota ≤ 200, clave de idempotencia `request_id` única por organización) y `public.inventory_event_details` (detalle estructurado de los eventos de stock, sin la nota libre). Claves foráneas compuestas `(organization_id, id)` hacia los artículos; RLS por organización y **solo SELECT** para usuarios; `anon` sin privilegios; sin DELETE ni TRUNCATE.
 - Reglas en triggers de las tablas: el artículo nace con saldo 0 (INV-3) y el saldo solo lo cambia `private.stock_movements_apply` (BEFORE INSERT del movimiento, SECURITY DEFINER, `search_path` vacío), que bloquea el artículo con `FOR UPDATE`, rechaza archivados (`NX021`) y saldos negativos (`NX022`, además del CHECK `quantity >= 0`) y, en consumos, bloquea la orden con `FOR SHARE` y exige que sea de la misma organización y no terminal (`NX023`). Archivado de solo lectura también frente a SQL directo (INV-8).

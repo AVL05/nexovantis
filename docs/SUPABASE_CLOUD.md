@@ -2,7 +2,11 @@
 
 Aprovisionado por Orchestrator el 2026-11-24 con el conector oficial de Supabase, con autorización humana expresa (coste autorizado: 0 €). Este documento no contiene secretos: la clave `service_role`, la contraseña de la base de datos y los tokens no se han solicitado ni se guardan en Git.
 
-## Proyecto
+## Estado registrado de cara a F8
+
+El último cierre documenta **14/14 migraciones alineadas** y los seeds de CRM, órdenes, presupuestos e inventario cargados. El registro público se desactivó y las cuentas de demostración se aprovisionaron durante F3. Antes de desplegar, confirma en el panel el estado del proyecto, el plan, Auth y las cuentas demo según [DEPLOYMENT.md](DEPLOYMENT.md). Los apartados siguientes recogen el historial de aprovisionamiento.
+
+## Proyecto (aprovisionamiento de F3)
 
 - Organización: AVL05, plan **Free** (`tier_free`). Coste de creación consultado con `get_cost`: **0 $/mes**; sin facturación ni recursos de pago.
 - Proyecto: `nexovantis`, ref `sokguksbymvfcuceswdo`, región `eu-central-1` (Frankfurt), PostgreSQL 17, estado `ACTIVE_HEALTHY`.
@@ -20,7 +24,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<clave publicable sb_publishable_… del pa
 
 La clave publicable no es secreta (la protege RLS), pero tampoco se versiona. No usar la clave `anon` heredada (JWT) ni la `service_role` en la aplicación.
 
-## Migraciones
+## Primeras migraciones de F3
 
 Aplicadas en orden con `apply_migration`, con el contenido literal de `supabase/migrations/`:
 
@@ -41,14 +45,14 @@ El conector asigna la versión según la hora de aplicación. Antes de usar `sup
 - Funciones `private.*` con `search_path=''`; `is_org_member` y `has_org_role` SECURITY DEFINER, ejecutables solo por `authenticated`; las funciones de trigger no son ejecutables por `anon` ni `authenticated`; `prevent_unarchive` con el cuerpo de la migración 0300.
 - Avisos de Supabase (security y performance): **0**.
 
-## Pasos manuales pendientes
+## Pasos manuales de F3 (completados)
 
 1. **Desactivar el registro público**: el conector no permite cambiar la configuración de Auth. Panel → Authentication → Sign In / Providers → desactivar "Allow new users to sign up". (`supabase/config.toml` no fija `enable_signup` para el entorno local.)
 2. Crear `.env.local` con los dos valores de arriba.
 
-## Aprovisionamiento demo para TASK-007 (preparado, no ejecutado)
+## Procedimiento de aprovisionamiento demo (TASK-007)
 
-Organizaciones y membresías se crean fuera de la app (ADR-001). Procedimiento propuesto, pendiente de aprobación con los criterios de TASK-007:
+Organizaciones y membresías se crean fuera de la app (ADR-001). Procedimiento registrado para crear cuentas y asignar membresías. El cierre de F3 figura en [STATUS.md](STATUS.md).
 
 1. El humano crea los usuarios demo en el panel (Authentication → Users → Add user, con "Auto Confirm User") y elige sus contraseñas; no se registran en Git ni en el chat. Propuesta: dos organizaciones ficticias con un `owner` y un `member` cada una, con correos de un dominio ficticio.
 2. Orchestrator inserta organizaciones y membresías por SQL (rol `postgres`, que omite RLS), resolviendo `user_id` por correo:
@@ -96,11 +100,11 @@ on conflict do nothing;
 
 Seed de datos demo (clientes y técnicos ficticios, idempotente): véase [SEED.md](SEED.md).
 
-## Migraciones de TASK-010 (remediación de AUDIT-002): preparadas, NO aplicadas en Cloud
+## Migraciones de TASK-010 y TASK-010B (remediación de AUDIT-002)
 
-Cinco migraciones nuevas, posteriores a `20261124100000`: `20261125090000_task010_name_constraints`, `20261125090100_task010_activity_seq`, `20261125090200_task010_archived_readonly`, `20261125090300_task010_demo_fixture_identity` y `20261125100000_task010b_activity_seq_required` (TASK-010B: `CHECK (seq is not null) NOT VALID`). No se ha ejecutado nada en Cloud. Su aplicación requiere autorización humana expresa.
+Cinco migraciones nuevas, posteriores a `20261124100000`: `20261125090000_task010_name_constraints`, `20261125090100_task010_activity_seq`, `20261125090200_task010_archived_readonly`, `20261125090300_task010_demo_fixture_identity` y `20261125100000_task010b_activity_seq_required` (TASK-010B: `CHECK (seq is not null) NOT VALID`). Se aplicaron durante el cierre de G2, que dejó 10/10 migraciones alineadas y 49 identidades demo reconciliadas. [Cierre de G2](STATUS.md).
 
-### Verificaciones previas (solo lectura), antes de aplicarlas
+### Verificaciones de preaplicación registradas en el plan
 
 1. **Nombres** (`supabase/checks/name-constraints-precheck.sql`, con privilegios de administración): debe devolver **0 filas**. Lista `table_name`, `id` y `reason` de cada organización, cliente o técnico con nombre vacío, solo espacios en blanco (tabulaciones, saltos de línea, NBSP…) o de más de 200 caracteres almacenados. Si devuelve filas, la migración `…090000` **fallaría entera** (no recorta ni reescribe datos): corregirlas a mano, con decisión humana, y repetir la comprobación.
 2. **Eventos**: anotar `select count(*) from public.activity_events` y comprobar que la migración `…090100` los deja con `seq` nulo (los eventos existentes no reciben orden inventado). `…100000` no reescribe ni valida esos eventos (`NOT VALID`): solo rechaza `seq = NULL` en filas nuevas; no ejecutar `VALIDATE CONSTRAINT`.
@@ -108,9 +112,9 @@ Cinco migraciones nuevas, posteriores a `20261124100000`: `20261125090000_task01
 4. **Seed y reconciliación**: si Cloud ya recibió el seed anterior, aplicar `…090300`, ejecutar `supabase/seeds/reconcile-demo-crm.sql` en modo comprobación, revisar el informe y solo entonces aplicar y volver a lanzar el seed (orden y riesgos en [SEED.md](SEED.md)). No lanzar el seed nuevo sin reconciliar: omitiría los fixtures que colisionen, pero nunca duplica filas con el mismo nombre ni con la misma firma de contacto.
 5. Orden de aplicación por el conector (`apply_migration`), una a una y en el orden de la versión; después alinear el historial como se hizo antes (versión del conector distinta de la del repositorio).
 
-### Comprobaciones aplazadas (stack local de Supabase en CI y, tras la autorización, Cloud)
+### Comprobaciones previstas en el plan (histórico)
 
-Sin ejecutar: `pnpm test:supabase` (`logout-revocation`, `name-constraints`, `archived-readonly`, `archive-restore`, `rls`) y `pnpm test:e2e:supabase` (`task010-ui`, `crm`) con Auth y PostgREST reales; la caracterización de la sesión copiada cuando falla la revocación remota (A02-01) solo se comprueba allí. Tras aplicar en Cloud, en solo lectura: restricciones `*_name_length` con la definición nueva, columna `activity_events.seq` (bigint, única, sin INSERT/UPDATE para `anon` y `authenticated`), restricción `activity_events_seq_required` (`convalidated = false`), triggers `*_prevent_unarchive` con `WHEN (old.archived_at is not null or new.archived_at is not null)` y `private.demo_fixture_identity` sin privilegios para `anon` y `authenticated`; los avisos de seguridad de Supabase deben seguir en 0.
+El plan incluía `pnpm test:supabase` (`logout-revocation`, `name-constraints`, `archived-readonly`, `archive-restore`, `rls`) y `pnpm test:e2e:supabase` (`task010-ui`, `crm`) con Auth y PostgREST reales; la caracterización de la sesión copiada cuando falla la revocación remota (A02-01) correspondía a ese entorno. El resultado del retest y CI se recoge en [STATUS.md](STATUS.md). Tras aplicar en Cloud, en solo lectura: restricciones `*_name_length` con la definición nueva, columna `activity_events.seq` (bigint, única, sin INSERT/UPDATE para `anon` y `authenticated`), restricción `activity_events_seq_required` (`convalidated = false`), triggers `*_prevent_unarchive` con `WHEN (old.archived_at is not null or new.archived_at is not null)` y `private.demo_fixture_identity` sin privilegios para `anon` y `authenticated`; los avisos de seguridad de Supabase deben seguir en 0.
 
 ## Migración de TASK-013 (F6, inventario y actividad): aplicada en Cloud (14/14)
 
