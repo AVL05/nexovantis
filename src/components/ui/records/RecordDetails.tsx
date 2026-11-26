@@ -7,7 +7,7 @@ function Item({ term, children }: Readonly<{ term: string; children: ReactNode }
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-xs font-semibold tracking-wide text-ink-muted uppercase">{term}</dt>
-      <dd className="text-sm break-words text-ink">{children}</dd>
+      <dd className="text-sm [overflow-wrap:anywhere] text-ink">{children}</dd>
     </div>
   );
 }
@@ -33,7 +33,7 @@ export function RecordDetails({
       ) : null}
       <div className="flex flex-col gap-0.5 sm:col-span-2 xl:col-span-3">
         <dt className="text-xs font-semibold tracking-wide text-ink-muted uppercase">Notas</dt>
-        <dd className="text-sm break-words whitespace-pre-wrap text-ink">
+        <dd className="text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">
           {record.notes ?? 'Sin notas'}
         </dd>
       </div>

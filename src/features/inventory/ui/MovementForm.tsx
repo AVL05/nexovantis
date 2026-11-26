@@ -1,10 +1,11 @@
 'use client';
 
-import { useActionState, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field, FieldError, Label, inputClass } from '@/components/ui/Field';
+import { focusLost, submitKeepingValues } from '@/components/ui/forms';
 import { LiveRegion } from '@/components/ui/LiveRegion';
 import { Select } from '@/components/ui/Select';
 import { formatDate } from '@/lib/records/format';
@@ -44,7 +45,7 @@ export function MovementForm({
 }>) {
   const [kind, setKind] = useState<MovementKind>('in');
   const formRef = useRef<HTMLFormElement>(null);
-  // Tras un registro correcto se limpian los campos para el siguiente movimiento.
+  // Los campos se limpian solo tras un registro correcto; si falla se conservan todos.
   const [state, formAction, pending] = useActionState(
     async (prev: MovementActionState, formData: FormData) => {
       const next = await action(prev, formData);
@@ -52,31 +53,42 @@ export function MovementForm({
         formRef.current?.reset();
         setKind('in');
       }
-      return next;
+      return { ...next };
     },
     IDLE,
   );
   const errors = state.fieldErrors ?? {};
 
+  // El envío deshabilita el botón: si el foco se perdió, va al mensaje de error o al título.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state.status === 'idle' || !focusLost()) return;
+    (errorRef.current ?? headingRef.current)?.focus();
+  }, [state]);
+
   const consumption = kind === 'consumption';
 
   return (
     <section aria-labelledby="movimiento" className="flex flex-col gap-3">
-      <h2 id="movimiento" className="text-base font-semibold">
+      <h2 id="movimiento" ref={headingRef} tabIndex={-1} className="text-base font-semibold">
         Registrar movimiento
       </h2>
       <form
         ref={formRef}
         action={formAction}
+        onSubmit={submitKeepingValues(formAction)}
         aria-label="Registrar movimiento"
         className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5"
       >
         <input type="hidden" name="request_id" value={requestId} />
         <input type="hidden" name="item_id" value={itemId} />
         {state.status === 'error' && state.message ? (
-          <Alert tone="danger" data-testid="movement-error">
-            {state.message}
-          </Alert>
+          <div ref={errorRef} tabIndex={-1}>
+            <Alert tone="danger" data-testid="movement-error">
+              {state.message}
+            </Alert>
+          </div>
         ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">

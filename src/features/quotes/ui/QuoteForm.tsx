@@ -5,6 +5,7 @@ import { useActionState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field, FieldError, Label, inputClass } from '@/components/ui/Field';
+import { submitKeepingValues, useFocusOnError } from '@/components/ui/forms';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { Select } from '@/components/ui/Select';
 import { IDLE_FORM, type FormState } from '@/lib/records/types';
@@ -39,15 +40,22 @@ export function QuoteForm({
   const [state, formAction, pending] = useActionState(action, IDLE_FORM);
   const values = state.values ?? initial;
   const errors = state.fieldErrors ?? {};
+  const errorRef = useFocusOnError(state);
 
   return (
-    <form action={formAction} className="flex max-w-2xl flex-col gap-5">
+    <form
+      action={formAction}
+      onSubmit={submitKeepingValues(formAction)}
+      className="flex max-w-2xl flex-col gap-5"
+    >
       {requestId ? <input type="hidden" name="request_id" value={requestId} /> : null}
       {quoteId ? <input type="hidden" name="id" value={quoteId} /> : null}
       {state.status === 'error' && state.message ? (
-        <Alert tone="danger" data-testid="form-error">
-          {state.message}
-        </Alert>
+        <div ref={errorRef} tabIndex={-1}>
+          <Alert tone="danger" data-testid="form-error">
+            {state.message}
+          </Alert>
+        </div>
       ) : null}
 
       {customers.length > 0 ? (

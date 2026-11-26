@@ -1,11 +1,12 @@
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/Button';
+import { CollapsibleFilters } from '@/components/ui/CollapsibleFilters';
 import { Field } from '@/components/ui/Field';
 import { Select } from '@/components/ui/Select';
 
 import { QUOTE_STATUSES, STATUS_LABEL } from '../constants';
-import { hasActiveFilters, type QuoteListParams } from '../params';
+import { buildQuotesHref, hasActiveFilters, type QuoteListParams } from '../params';
 import type { CustomerOption } from '../service';
 
 /** Búsqueda y filtros por GET: sin JavaScript, URL compartible y la página se reinicia al filtrar. */
@@ -13,10 +14,19 @@ export function QuoteFilters({
   params,
   customers,
 }: Readonly<{ params: QuoteListParams; customers: readonly CustomerOption[] }>) {
+  const activeCount = [params.status, params.customer].filter(Boolean).length;
   return (
-    <form action="/quotes" method="get" role="search" aria-label="Buscar y filtrar presupuestos">
-      <div className="grid gap-4 rounded-lg border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="sm:col-span-2">
+    // La clave reinicia los campos no controlados al cambiar los filtros por enlace ("Limpiar").
+    <form
+      key={buildQuotesHref('', { ...params, page: 1 })}
+      action="/quotes"
+      method="get"
+      role="search"
+      aria-label="Buscar y filtrar presupuestos"
+    >
+      <CollapsibleFilters
+        activeCount={activeCount}
+        search={
           <Field
             label="Buscar por número, título, descripción o cliente"
             name="q"
@@ -25,7 +35,21 @@ export function QuoteFilters({
             autoComplete="off"
             defaultValue={params.q}
           />
-        </div>
+        }
+        actions={
+          <>
+            <Button type="submit">Filtrar</Button>
+            {hasActiveFilters(params) ? (
+              <Link
+                href="/quotes"
+                className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap text-accent hover:underline"
+              >
+                Limpiar filtros
+              </Link>
+            ) : null}
+          </>
+        }
+      >
         <Select
           label="Estado"
           name="estado"
@@ -40,18 +64,7 @@ export function QuoteFilters({
           defaultValue={params.customer ?? ''}
           options={customers.map((c) => ({ value: c.id, label: c.name }))}
         />
-        <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-4">
-          <Button type="submit">Filtrar</Button>
-          {hasActiveFilters(params) ? (
-            <Link
-              href="/quotes"
-              className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium text-accent hover:underline"
-            >
-              Limpiar filtros
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      </CollapsibleFilters>
     </form>
   );
 }

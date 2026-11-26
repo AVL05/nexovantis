@@ -1,11 +1,12 @@
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/Button';
+import { CollapsibleFilters } from '@/components/ui/CollapsibleFilters';
 import { Field } from '@/components/ui/Field';
 import { Select } from '@/components/ui/Select';
 
 import { ORDER_PRIORITIES, ORDER_STATUSES, PRIORITY_LABEL, STATUS_LABEL } from '../constants';
-import { UNASSIGNED, hasActiveFilters, type OrderListParams } from '../params';
+import { UNASSIGNED, buildOrdersHref, hasActiveFilters, type OrderListParams } from '../params';
 import type { PersonOption } from '../service';
 
 /**
@@ -20,10 +21,26 @@ export function OrderFilters({
   customers: readonly PersonOption[];
   technicians: readonly PersonOption[];
 }>) {
+  const activeCount = [
+    params.status,
+    params.priority,
+    params.technician,
+    params.customer,
+    params.from,
+    params.to,
+  ].filter(Boolean).length;
   return (
-    <form action="/orders" method="get" role="search" aria-label="Buscar y filtrar órdenes">
-      <div className="grid gap-4 rounded-lg border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="sm:col-span-2">
+    // La clave reinicia los campos no controlados al cambiar los filtros por enlace ("Limpiar").
+    <form
+      key={buildOrdersHref('', { ...params, page: 1 })}
+      action="/orders"
+      method="get"
+      role="search"
+      aria-label="Buscar y filtrar órdenes"
+    >
+      <CollapsibleFilters
+        activeCount={activeCount}
+        search={
           <Field
             label="Buscar por título, descripción o cliente"
             name="q"
@@ -32,7 +49,21 @@ export function OrderFilters({
             autoComplete="off"
             defaultValue={params.q}
           />
-        </div>
+        }
+        actions={
+          <>
+            <Button type="submit">Filtrar</Button>
+            {hasActiveFilters(params) ? (
+              <Link
+                href="/orders"
+                className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap text-accent hover:underline"
+              >
+                Limpiar filtros
+              </Link>
+            ) : null}
+          </>
+        }
+      >
         <Select
           label="Estado"
           name="estado"
@@ -66,18 +97,7 @@ export function OrderFilters({
         />
         <Field label="Fecha desde" name="desde" type="date" defaultValue={params.from ?? ''} />
         <Field label="Fecha hasta" name="hasta" type="date" defaultValue={params.to ?? ''} />
-        <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-4">
-          <Button type="submit">Filtrar</Button>
-          {hasActiveFilters(params) ? (
-            <Link
-              href="/orders"
-              className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium text-accent hover:underline"
-            >
-              Limpiar filtros
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      </CollapsibleFilters>
     </form>
   );
 }

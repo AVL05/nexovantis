@@ -73,24 +73,6 @@ export async function listEntityHistory(
   return ok(entries);
 }
 
-export type RecentActivity = {
-  id: string;
-  entityType: 'customer' | 'technician' | 'work_order';
-  entityId: string;
-  /** Nombre o título de la entidad si todavía es legible bajo RLS; null en otro caso. */
-  entityLabel: string | null;
-  action:
-    | 'archived'
-    | 'restored'
-    | 'created'
-    | 'status_changed'
-    | 'assigned'
-    | 'reassigned'
-    | 'cancelled';
-  occurredAt: string;
-  actor: 'self' | 'member' | 'former';
-};
-
 const RECENT_ACTIONS = [
   'archived',
   'restored',
@@ -99,13 +81,28 @@ const RECENT_ACTIONS = [
   'assigned',
   'reassigned',
   'cancelled',
+  'stock_in',
+  'stock_out',
+  'stock_consumed',
 ] as const;
-const RECENT_TYPES = ['customer', 'technician', 'work_order'] as const;
+const RECENT_TYPES = ['customer', 'technician', 'work_order', 'inventory_item'] as const;
+
+export type RecentActivity = {
+  id: string;
+  entityType: (typeof RECENT_TYPES)[number];
+  entityId: string;
+  /** Nombre o título de la entidad si todavía es legible bajo RLS; null en otro caso. */
+  entityLabel: string | null;
+  action: (typeof RECENT_ACTIONS)[number];
+  occurredAt: string;
+  actor: 'self' | 'member' | 'former';
+};
 
 const LABEL_SOURCE = {
   customer: { table: 'customers', column: 'name' },
   technician: { table: 'technicians', column: 'full_name' },
   work_order: { table: 'work_orders', column: 'title' },
+  inventory_item: { table: 'inventory_items', column: 'name' },
 } as const;
 
 /** Actividad reciente de la organización (lectura bajo RLS, más reciente primero). */
@@ -118,8 +115,8 @@ export async function listRecentActivity(
     .from('activity_events')
     .select('id, entity_type, entity_id, action, actor_id, occurred_at')
     .eq('organization_id', ctx.organizationId)
-    // Solo lo que el panel sabe mostrar: los demás eventos (presupuestos, inventario) viven en /activity
-    // y no deben ocupar huecos del límite.
+    // Solo lo que el panel sabe mostrar: los demás eventos (presupuestos) viven en /activity y no
+    // deben ocupar huecos del límite.
     .in('entity_type', RECENT_TYPES)
     .in('action', RECENT_ACTIONS)
     .order('occurred_at', { ascending: false })

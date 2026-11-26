@@ -126,7 +126,7 @@ function Item({
   return (
     <div className={cn('flex flex-col gap-0.5', className)}>
       <dt className="text-xs font-semibold tracking-wide text-ink-muted uppercase">{term}</dt>
-      <dd className="text-sm break-words text-ink">{children}</dd>
+      <dd className="text-sm [overflow-wrap:anywhere] text-ink">{children}</dd>
     </div>
   );
 }

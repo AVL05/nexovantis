@@ -102,8 +102,14 @@ test('flujo: crear, conceptos con redondeo half-up, editar, quitar, aceptar y or
 
   // Quitar un concepto y editar otro: la base recalcula los totales.
   await page.getByRole('button', { name: 'Quitar concepto Material' }).click();
+  const confirmation = page.getByRole('dialog');
+  await expect(confirmation).toBeVisible();
+  await total(page, '30,27 €'); // abrir la confirmacion todavia no quita nada
+  await confirmation.getByRole('button', { name: 'Quitar concepto', exact: true }).click();
   await total(page, '30,25 €'); // el recalculo confirma que la peticion ya se aplico
   await expect(page.getByRole('cell', { name: 'Material', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Conceptos', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Editar concepto Mano de obra' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Cantidad', { exact: true }).fill('3');

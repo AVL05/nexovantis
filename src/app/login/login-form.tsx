@@ -5,6 +5,7 @@ import { useActionState, useId, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field, Label, inputClass } from '@/components/ui/Field';
+import { useFocusOnError } from '@/components/ui/forms';
 import { loginAction, type LoginState } from '@/features/auth/actions';
 
 const initialState: LoginState = { error: null, email: '' };
@@ -42,6 +43,7 @@ export function PasswordField() {
 
 export function LoginForm({ next }: Readonly<{ next: string }>) {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
+  const errorRef = useFocusOnError(state);
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
@@ -56,9 +58,11 @@ export function LoginForm({ next }: Readonly<{ next: string }>) {
       />
       <PasswordField />
       {state.error ? (
-        <Alert tone="danger" data-testid="form-error">
-          {state.error}
-        </Alert>
+        <div ref={errorRef} tabIndex={-1}>
+          <Alert tone="danger" data-testid="form-error">
+            {state.error}
+          </Alert>
+        </div>
       ) : null}
       <Button type="submit" size="lg" loading={pending}>
         {pending ? 'Iniciando sesión…' : 'Iniciar sesión'}

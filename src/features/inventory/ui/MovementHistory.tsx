@@ -42,9 +42,10 @@ function Detail({ movement }: Readonly<{ movement: MovementView }>) {
 }
 
 /**
- * Historial de movimientos (más reciente primero): tabla desde 1024 px y tarjetas en móvil. Cada fila
- * conserva cantidad, saldo anterior y posterior, orden vinculada, nota y actor. Sin acciones: no hay
- * anulaciones ni borrados (INV-4).
+ * Historial de movimientos (más reciente primero): tabla si el contenedor da para ella (42rem) y
+ * tarjetas en caso contrario, sin scroll horizontal. Cada fila conserva fecha, actor, tipo, cantidad,
+ * saldo anterior y posterior, orden vinculada y nota. Sin acciones: no hay anulaciones ni borrados
+ * (INV-4).
  */
 export function MovementHistory({
   items,
@@ -59,46 +60,49 @@ export function MovementHistory({
   }
 
   return (
-    <>
-      <div className="hidden lg:block">
+    <div className="@container">
+      <div className="hidden @2xl:block">
         <Table caption="Historial de movimientos">
           <thead>
             <tr>
-              <Th className="w-px whitespace-nowrap">Fecha</Th>
-              <Th className="w-px whitespace-nowrap">Tipo</Th>
-              <Th className="w-px text-right whitespace-nowrap">Cantidad</Th>
-              <Th className="w-px text-right whitespace-nowrap">Saldo</Th>
+              <Th className="w-px">Fecha y autor</Th>
+              <Th className="w-px">Tipo</Th>
+              <Th className="w-px text-right">Cantidad y saldo</Th>
               <Th>Orden y nota</Th>
-              <Th className="w-px whitespace-nowrap">Quién</Th>
             </tr>
           </thead>
           <tbody>
             {items.map((movement) => (
               <tr key={movement.id}>
-                <Td className="whitespace-nowrap">
-                  <time dateTime={movement.createdAt}>{formatDateTime(movement.createdAt)}</time>
+                <Td>
+                  <time className="block whitespace-nowrap" dateTime={movement.createdAt}>
+                    {formatDateTime(movement.createdAt)}
+                  </time>
+                  <span className="block text-ink-muted">{ACTOR_LABEL[movement.actor]}</span>
                 </Td>
-                <Td className="whitespace-nowrap">
+                <Td>
                   <Badge tone={KIND_TONE[movement.kind]}>{KIND_LABEL[movement.kind]}</Badge>
                 </Td>
-                <Td className="text-right font-semibold whitespace-nowrap tabular-nums">
-                  {SIGN[movement.kind]}
-                  {formatQuantity(movement.quantity)} {unit}
+                <Td className="text-right whitespace-nowrap tabular-nums">
+                  <span className="block font-semibold">
+                    {SIGN[movement.kind]}
+                    {formatQuantity(movement.quantity)} {unit}
+                  </span>
+                  <span className="block text-ink-muted">
+                    {formatQuantity(movement.balanceBefore)} →{' '}
+                    {formatQuantity(movement.balanceAfter)}
+                  </span>
                 </Td>
-                <Td className="text-right whitespace-nowrap text-ink-muted tabular-nums">
-                  {formatQuantity(movement.balanceBefore)} → {formatQuantity(movement.balanceAfter)}
-                </Td>
-                <Td className="max-w-0 min-w-48">
+                <Td className="min-w-40">
                   <Detail movement={movement} />
                 </Td>
-                <Td className="whitespace-nowrap">{ACTOR_LABEL[movement.actor]}</Td>
               </tr>
             ))}
           </tbody>
         </Table>
       </div>
 
-      <ol aria-label="Historial de movimientos" className="flex flex-col gap-3 lg:hidden">
+      <ol aria-label="Historial de movimientos" className="flex flex-col gap-3 @2xl:hidden">
         {items.map((movement) => (
           <li
             key={movement.id}
@@ -125,6 +129,6 @@ export function MovementHistory({
           </li>
         ))}
       </ol>
-    </>
+    </div>
   );
 }

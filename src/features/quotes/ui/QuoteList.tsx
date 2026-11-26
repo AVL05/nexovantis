@@ -29,6 +29,7 @@ export function QuoteList({
     if (hasActiveFilters(params)) {
       return (
         <EmptyState
+          headingLevel="h2"
           title="No hay presupuestos que coincidan"
           action={
             <LinkButton href="/quotes" variant="secondary">
@@ -42,6 +43,7 @@ export function QuoteList({
     }
     return (
       <EmptyState
+        headingLevel="h2"
         title="Todavía no hay presupuestos"
         action={<LinkButton href="/quotes/new">Crear el primer presupuesto</LinkButton>}
       >
@@ -98,7 +100,10 @@ export function QuoteList({
             className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface p-4"
           >
             <div className="flex items-start justify-between gap-3">
-              <Link href={href(item.id)} className={`${TITLE_LINK} min-w-0 break-words`}>
+              <Link
+                href={href(item.id)}
+                className={`${TITLE_LINK} min-w-0 [overflow-wrap:anywhere]`}
+              >
                 {item.title}
               </Link>
               <QuoteStatusBadge status={item.status} />

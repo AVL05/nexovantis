@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { cn } from './cn';
 
 const LINK =
-  'inline-flex h-10 items-center justify-center rounded-md border border-line-strong bg-surface px-4 text-sm font-medium text-ink hover:bg-sunken';
+  'inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md border border-line-strong bg-surface px-4 text-sm font-medium text-ink hover:bg-sunken';
 const DISABLED =
-  'inline-flex h-10 items-center justify-center rounded-md border border-line px-4 text-sm text-ink-subtle';
+  'inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md border border-line px-4 text-sm text-ink-subtle';
 
 /**
  * Paginación por enlaces (funciona sin JavaScript). `hrefFor(page)` construye cada URL; el
