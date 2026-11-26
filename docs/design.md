@@ -18,7 +18,7 @@ Audiencia: dueños y administrativos de pequeñas empresas de servicio técnico,
 
 **Elección: A.** Prioriza lectura prolongada de tablas y formularios, es verificable en contraste con pocos tokens, no depende de fuentes externas y distingue visualmente el marco (oscuro) del trabajo (claro). Solo tema claro en esta fase (`color-scheme: light`); el tema oscuro queda fuera de alcance.
 
-**Rasgo distintivo:** el lateral oscuro con foco turquesa y el monograma "N" trazado como recorrido; el acento teal se reserva a acciones primarias y estado activo.
+**Rasgo distintivo:** el monograma «N» une dos planos en verde petróleo y menta. Aparece en la portada, el acceso, la navegación y el icono del navegador. La portada enlaza al acceso y presenta una vista del panel con órdenes de ejemplo.
 
 ## 2. Tokens
 
@@ -28,23 +28,24 @@ Todos son variables `@theme` en `globals.css` (utilidades Tailwind: `bg-canvas`,
 
 | Token                     | Valor             | Uso                          | Contraste                                                       |
 | ------------------------- | ----------------- | ---------------------------- | --------------------------------------------------------------- |
-| `canvas`                  | #F6F7F9           | fondo de página              | ink sobre canvas 16.3:1                                         |
-| `surface`                 | #FFFFFF           | tarjetas, cabecera, inputs   | ink 17.5:1                                                      |
-| `sunken`                  | #EEF1F4           | cabeceras de tabla, hover    | ink-subtle 5.1:1                                                |
-| `line`                    | #D8DDE4           | divisores decorativos        | n/a (no transmite estado)                                       |
-| `line-strong`             | #7C8796           | bordes de input/botón        | 3.6:1 sobre surface (UI 3:1)                                    |
-| `ink`                     | #0F1A2A           | texto principal              | 17.5:1                                                          |
-| `ink-muted`               | #4A5668           | texto secundario             | 7.4:1                                                           |
-| `ink-subtle`              | #5B6778           | ayudas, placeholder          | 5.7:1                                                           |
-| `accent` / `accent-hover` | #0B6E6E / #095858 | acción primaria, enlaces     | blanco sobre accent 6.0:1 / 8.2:1                               |
-| `focus`                   | #0B5FD9           | anillo de foco (claro)       | 5.8:1                                                           |
-| `nav-focus`               | #7FD6D6           | anillo de foco sobre lateral | 10.3:1                                                          |
+| `canvas`                  | #F3F7F6           | fondo de página              | ink sobre canvas 14.5:1                                         |
+| `surface`                 | #FFFFFF           | tarjetas, cabecera, inputs   | ink 15.7:1                                                      |
+| `sunken`                  | #EAF1F0           | cabeceras de tabla, hover    | ink-subtle 5.0:1                                                |
+| `line`                    | #D8E3E1           | divisores decorativos        | n/a (no transmite estado)                                       |
+| `line-strong`             | #738682           | bordes de input/botón        | 3.8:1 sobre surface                                             |
+| `ink`                     | #102723           | texto principal              | 15.7:1 sobre surface                                            |
+| `ink-muted`               | #405853           | texto secundario             | 7.7:1 sobre surface                                             |
+| `ink-subtle`              | #536B65           | ayudas, placeholder          | 5.7:1 sobre surface                                             |
+| `accent` / `accent-hover` | #087566 / #065B50 | acción primaria, enlaces     | blanco sobre accent 5.6:1 / 8.0:1                               |
+| `accent-soft`             | #DAF2EB           | superficies destacadas       | ink-muted 6.5:1                                                 |
+| `focus`                   | #0864C3           | anillo de foco (claro)       | 5.4:1 sobre canvas                                              |
+| `nav-focus`               | #65E2C6           | anillo de foco sobre lateral | 9.8:1 sobre nav / 6.9:1 sobre nav-active                         |
 | `success` / soft          | #0F6B40 / #E3F4EA | éxito                        | 5.8:1                                                           |
 | `warning` / soft          | #7A4A00 / #FFF1D6 | aviso                        | 6.7:1                                                           |
 | `danger` / soft           | #B42318 / #FDE8E6 | error, destructivo           | 5.6:1 (6.6:1 sobre blanco)                                      |
 | `info` / soft             | #1D5FA8 / #E6F0FB | información                  | 5.6:1                                                           |
 | `neutral` / soft          | #3A4556 / #E7EBF0 | badge neutro                 | 8.1:1                                                           |
-| `nav` / `nav-active`      | #0F1B2D / #1F3049 | lateral                      | texto #C9D2DF 11.3:1; activo blanco 13.3:1; muted #9AA7BA 7.1:1 |
+| `nav` / `nav-active`      | #102826 / #20423D | lateral                      | nav-text #D1E4E0 11.7:1 y nav-muted #A6C4BE 8.3:1 sobre nav      |
 
 Los valores se calcularon con la fórmula de luminancia relativa WCAG; no sustituyen una auditoría con herramienta ni con usuarios. El color nunca es el único portador de significado (badges y alertas llevan texto e icono).
 
@@ -55,7 +56,7 @@ Pila del sistema (`--font-sans`: system-ui, Segoe UI, Roboto…), sin fuentes re
 ### Espaciado, radios, sombras
 
 - Espaciado: base 4 px, escala de Tailwind. Páginas: padding 16 px móvil / 32 px escritorio; separación entre bloques 24-32 px; dentro de tarjetas 16-24 px.
-- Radios: `sm` 4 (badges), `md` 8 (botones, inputs), `lg` 12 (tarjetas, diálogo). Bordes 1 px `line`; los controles interactivos usan `line-strong`.
+- Radios de componentes de uso compartido `sm` 4 (badges), `md` 8 (botones, inputs), `lg` 14 (tarjetas, diálogo). Bordes de 1 px y `line-strong` en los controles interactivos.
 - Elevación: plana por defecto. `shadow-card` para superficies sueltas; `shadow-pop` solo en capas flotantes (panel móvil, diálogo, aviso). La jerarquía se logra con bordes y fondo, no con sombras apiladas.
 
 ### Estados

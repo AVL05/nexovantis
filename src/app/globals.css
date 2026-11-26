@@ -1,20 +1,20 @@
 @import 'tailwindcss';
 
-/* Tokens de Nexovantis "Plano técnico". Ver docs/design.md. Solo tema claro. */
+/* Tokens de Nexovantis. Ver docs/design.md. Solo tema claro. */
 @theme {
-  --color-canvas: #f6f7f9;
+  --color-canvas: #f3f7f6;
   --color-surface: #ffffff;
-  --color-sunken: #eef1f4;
-  --color-line: #d8dde4;
-  --color-line-strong: #7c8796;
-  --color-ink: #0f1a2a;
-  --color-ink-muted: #4a5668;
-  --color-ink-subtle: #5b6778;
+  --color-sunken: #eaf1f0;
+  --color-line: #d8e3e1;
+  --color-line-strong: #738682;
+  --color-ink: #102723;
+  --color-ink-muted: #405853;
+  --color-ink-subtle: #536b65;
 
-  --color-accent: #0b6e6e;
-  --color-accent-hover: #095858;
-  --color-accent-soft: #e0f1f1;
-  --color-focus: #0b5fd9;
+  --color-accent: #087566;
+  --color-accent-hover: #065b50;
+  --color-accent-soft: #daf2eb;
+  --color-focus: #0864c3;
 
   --color-success: #0f6b40;
   --color-success-soft: #e3f4ea;
@@ -28,21 +28,21 @@
   --color-neutral: #3a4556;
   --color-neutral-soft: #e7ebf0;
 
-  --color-nav: #0f1b2d;
-  --color-nav-active: #1f3049;
-  --color-nav-text: #c9d2df;
-  --color-nav-muted: #9aa7ba;
-  --color-nav-focus: #7fd6d6;
+  --color-nav: #102826;
+  --color-nav-active: #20423d;
+  --color-nav-text: #d1e4e0;
+  --color-nav-muted: #a6c4be;
+  --color-nav-focus: #65e2c6;
 
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
 
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-lg: 14px;
 
-  --shadow-card: 0 1px 2px rgb(15 26 42 / 0.06);
-  --shadow-pop: 0 8px 24px rgb(15 26 42 / 0.14), 0 1px 3px rgb(15 26 42 / 0.1);
+  --shadow-card: 0 1px 2px rgb(16 39 35 / 0.06);
+  --shadow-pop: 0 12px 28px rgb(16 39 35 / 0.16), 0 1px 3px rgb(16 39 35 / 0.1);
 
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
 }
@@ -86,7 +86,29 @@ body {
 }
 
 dialog::backdrop {
-  background: rgb(15 26 42 / 0.5);
+  background: rgb(16 39 35 / 0.5);
+}
+
+@media print {
+  body:has(.quote-print-preview) {
+    background: white;
+  }
+
+  .app-shell:has(.quote-print-preview) {
+    min-height: auto;
+  }
+
+  .app-shell:has(.quote-print-preview) > :not(:last-child),
+  .app-shell:has(.quote-print-preview) > div > header {
+    display: none;
+  }
+
+  .app-shell:has(.quote-print-preview) > div:last-child,
+  .app-shell:has(.quote-print-preview) > div > main {
+    display: block;
+    min-height: auto;
+    padding: 0;
+  }
 }
 
 @keyframes nx-spin {

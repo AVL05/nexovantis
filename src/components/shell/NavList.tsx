@@ -37,7 +37,7 @@ function Icon({ name }: Readonly<{ name: ShellNavItem['icon'] }>) {
   );
 }
 
-const ROW = 'flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium';
+const ROW = 'flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium';
 
 export function NavList({
   items,
@@ -55,7 +55,7 @@ export function NavList({
                 ROW,
                 'transition-[background-color,border-color,color] duration-150',
                 item.key === current
-                  ? 'bg-nav-active text-white'
+                  ? 'bg-nav-active font-semibold text-white [&>svg]:text-nav-focus'
                   : 'text-nav-text hover:bg-nav-active/60 hover:text-white',
               )}
             >

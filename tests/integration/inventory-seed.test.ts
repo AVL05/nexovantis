@@ -92,7 +92,7 @@ describe('seed demo de inventario', () => {
     await db.exec(inventorySql);
     first = await snapshot();
     const norte = await states(ID.norte);
-    expect(Object.keys(norte)).toHaveLength(11);
+    expect(Object.keys(norte)).toHaveLength(13);
     expect(norte).toMatchObject({
       'N-TUB-015': '50:ok:false',
       'N-TUB-022': '15:low:false',
@@ -102,6 +102,8 @@ describe('seed demo de inventario', () => {
       'N-TOR-M6': '1000:ok:false',
       'N-ABR-INX': '0:out:false',
       'N-BOM-OLD': '3:ok:true',
+      'N-BOM-300': '2:ok:false',
+      'N-KIT-PRE': '5:ok:false',
     });
     const sur = await states(ID.sur);
     expect(Object.keys(sur)).toHaveLength(5);
@@ -151,7 +153,7 @@ describe('seed demo de inventario', () => {
         where entity_type = 'inventory_item' group by 1 order by 1`,
     );
     expect(identity).toEqual([
-      { organization_id: ID.norte, n: 11 },
+      { organization_id: ID.norte, n: 13 },
       { organization_id: ID.sur, n: 5 },
     ]);
     const nulls = await su(
@@ -171,7 +173,7 @@ describe('seed demo de inventario', () => {
     );
     const count = (rows: Row[], key: string, value: string) =>
       rows.find((r) => r[key] === value)?.n;
-    expect(count(counts, 'action', 'created')).toBe(16);
+    expect(count(counts, 'action', 'created')).toBe(18);
     expect(count(counts, 'action', 'archived')).toBe(2);
     expect(count(counts, 'action', 'stock_in')).toBe(count(kinds, 'kind', 'in'));
     expect(count(counts, 'action', 'stock_out')).toBe(count(kinds, 'kind', 'out'));
@@ -245,7 +247,7 @@ describe('seed demo de inventario: precondiciones', () => {
     try {
       await bare.exec(inventorySql);
       const n = await bare.query<Row>(`select count(*)::int as n from public.inventory_items`);
-      expect(n.rows[0].n).toBe(16);
+      expect(n.rows[0].n).toBe(18);
       const c = await bare.query<Row>(
         `select count(*)::int as n from public.stock_movements where kind = 'consumption'`,
       );

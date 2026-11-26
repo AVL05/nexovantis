@@ -32,6 +32,7 @@ import { QuoteFilters } from './ui/QuoteFilters';
 import { QuoteForm } from './ui/QuoteForm';
 import { QuoteItems } from './ui/QuoteItems';
 import { QuoteList } from './ui/QuoteList';
+import { QuotePrintView } from './ui/QuotePrintView';
 import { QuoteTimeline } from './ui/QuoteTimeline';
 import { QuoteTotals } from './ui/QuoteTotals';
 
@@ -176,11 +177,18 @@ export async function QuoteDetailPage({
         backHref="/quotes"
         backLabel="Volver a presupuestos"
         actions={
-          allowed.edit ? (
-            <LinkButton href={`/quotes/${quote.id}/edit`} variant="secondary">
-              Editar
-            </LinkButton>
-          ) : null
+          <>
+            {items.ok && items.data.length > 0 ? (
+              <LinkButton href={`/quotes/${quote.id}/print`} variant="secondary">
+                Versión imprimible
+              </LinkButton>
+            ) : null}
+            {allowed.edit ? (
+              <LinkButton href={`/quotes/${quote.id}/edit`} variant="secondary">
+                Editar
+              </LinkButton>
+            ) : null}
+          </>
         }
       />
       {notice ? <Alert tone="success">{notice}</Alert> : null}
@@ -242,6 +250,23 @@ export async function QuoteDetailPage({
         </section>
       </div>
     </div>
+  );
+}
+
+export async function QuotePrintPage({ id }: Readonly<{ id: string }>) {
+  const ctx = await requireTenant();
+  const found = await quoteService.get(ctx, id);
+  if (!found.ok) {
+    if (found.kind === 'not_found') notFound();
+    throw new Error('No se pudo cargar el presupuesto.');
+  }
+  const items = await quoteService.items(ctx, found.data.id);
+  return (
+    <QuotePrintView
+      quote={found.data}
+      items={items.ok ? items.data : null}
+      organizationName={ctx.organizationName}
+    />
   );
 }
 

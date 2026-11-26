@@ -90,7 +90,11 @@ begin
         {"t":"in","q":1000,"n":"Existencia inicial"}]},
       {"k":"i10","r":"N-BOM-OLD","n":"Bomba circuladora descatalogada","d":"[DEMO] Artículo archivado con saldo: conserva su historial.","u":"ud","t":0,"a":true,"m":[
         {"t":"in","q":3,"n":"Existencia inicial"}]},
-      {"k":"i11","r":"N-ABR-INX","n":"Abrazadera inoxidable","d":"[DEMO] Artículo sin existencias todavía.","u":"ud","t":15,"m":[]}
+      {"k":"i11","r":"N-ABR-INX","n":"Abrazadera inoxidable","d":"[DEMO] Artículo sin existencias todavía.","u":"ud","t":15,"m":[]},
+      {"k":"i12","r":"N-BOM-300","n":"Bomba multicelular 3 kW","d":"[DEMO] Bomba para un grupo de presión de agua en edificios residenciales.","u":"ud","t":1,"m":[
+        {"t":"in","q":2,"n":"Recepción de dos bombas para reposición (albarán ficticio 0012)"}]},
+      {"k":"i13","r":"N-KIT-PRE","n":"Kit de conexión para grupo de presión","d":"[DEMO] Racores, juntas y válvula antirretorno para instalar una bomba.","u":"ud","t":2,"m":[
+        {"t":"in","q":5,"n":"Recepción de kits de montaje (albarán ficticio 0012)"}]}
     ]'::jsonb;
     else
       v_fixtures := '[

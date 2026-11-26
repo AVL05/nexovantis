@@ -25,11 +25,19 @@ test.describe('Página inicial (humo)', () => {
       /fundación|estado:|provisional|próximamente|en construcción/i,
     );
     await expect(page.getByRole('button')).toHaveCount(0);
-    await expect(page.getByRole('link')).toHaveCount(0);
+    const login = main.getByRole('link', { name: 'Iniciar sesión' });
+    await expect(login).toHaveAttribute('href', '/login');
+    await login.click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
   });
 
-  test('sirve el icono declarado sin error', async ({ page, request }) => {
+  test('carga la marca de portada y sirve el icono declarado', async ({ page, request }) => {
     await page.goto('/');
+
+    const brand = page.getByRole('banner').locator('img');
+    await expect(brand).toBeVisible();
+    await expect(brand).toHaveJSProperty('naturalWidth', 256);
 
     const href = await page.locator('link[rel="icon"]').first().getAttribute('href');
     expect(href).not.toBeNull();

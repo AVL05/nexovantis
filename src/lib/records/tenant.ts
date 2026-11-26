@@ -21,9 +21,16 @@ export type TenantContext = {
  * datos del cliente. Sin sesión redirige a /login; sin membresía, al panel (que muestra el
  * estado de acceso denegado). Se memoiza por solicitud.
  */
-export const requireTenant = cache(async (): Promise<TenantContext> => {
-  const { user, membership } = await requireMembership();
-  if (!membership) redirect(DASHBOARD_PATH);
-  const supabase = await createClient();
-  return { supabase, organizationId: membership.organizationId, userId: user.id };
-});
+export const requireTenant = cache(
+  async (): Promise<TenantContext & { organizationName: string }> => {
+    const { user, membership } = await requireMembership();
+    if (!membership) redirect(DASHBOARD_PATH);
+    const supabase = await createClient();
+    return {
+      supabase,
+      organizationId: membership.organizationId,
+      organizationName: membership.organizationName,
+      userId: user.id,
+    };
+  },
+);

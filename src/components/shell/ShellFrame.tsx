@@ -84,7 +84,7 @@ export function ShellFrame({
   }, [open, close]);
 
   return (
-    <div className="min-h-dvh">
+    <div className="app-shell min-h-dvh">
       <a
         href="#contenido"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-pop"
@@ -103,11 +103,11 @@ export function ShellFrame({
       <div
         id={NAV_ID}
         className={cn(
-          'on-dark fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col gap-6 bg-nav px-3 py-4 transition-[transform,visibility] duration-200 ease-out md:visible md:w-64 md:translate-x-0',
+          'on-dark fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col gap-3 bg-nav px-3 py-4 transition-[transform,visibility] duration-200 ease-out md:visible md:w-64 md:translate-x-0',
           open ? 'visible translate-x-0 shadow-pop' : 'invisible -translate-x-full',
         )}
       >
-        <div className="flex items-center justify-between gap-2 px-3 py-1">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-nav-active px-3 pt-1 pb-4">
           <BrandName onDark />
           <button
             type="button"
@@ -130,6 +130,7 @@ export function ShellFrame({
         </div>
         <nav
           aria-label="Principal"
+          className="min-h-0 overflow-y-auto overscroll-contain p-1"
           onClick={(event) => {
             if ((event.target as Element).closest('a')) close();
           }}
@@ -139,7 +140,7 @@ export function ShellFrame({
       </div>
 
       <div ref={contentRef} className="flex min-h-dvh flex-col md:pl-64">
-        <header className="sticky top-0 z-20 flex min-h-14 items-center gap-2 border-b border-line bg-surface px-3 py-2 sm:gap-3 sm:px-4 md:px-8">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center gap-2 border-b border-line bg-surface px-3 py-2 sm:gap-3 sm:px-4 md:px-8">
           <button
             ref={toggleRef}
             type="button"

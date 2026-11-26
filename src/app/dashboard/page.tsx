@@ -123,9 +123,9 @@ export default async function DashboardPage() {
     >
       <div className="flex flex-col gap-8">
         {/* Acción primaria a la vista; los accesos comparten línea con el título solo si caben. */}
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-5 rounded-2xl border border-line bg-accent-soft p-5 sm:p-6">
           <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">Panel</h1>
             <p className="text-sm [overflow-wrap:anywhere] text-ink-muted">
               Sesión iniciada como {user.email}
             </p>
@@ -139,7 +139,7 @@ export default async function DashboardPage() {
         </div>
 
         <section aria-labelledby="indicadores" className="flex flex-col gap-3">
-          <h2 id="indicadores" className="text-base font-semibold">
+          <h2 id="indicadores" className="text-lg font-semibold tracking-tight">
             Órdenes por estado
           </h2>
           <OrderIndicators data={data.orders} />
@@ -147,13 +147,13 @@ export default async function DashboardPage() {
 
         <div className="grid items-start gap-8 xl:grid-cols-2">
           <section aria-labelledby="pendientes" className="flex min-w-0 flex-col gap-3">
-            <h2 id="pendientes" className="text-base font-semibold">
+            <h2 id="pendientes" className="text-lg font-semibold tracking-tight">
               Órdenes pendientes
             </h2>
             <PendingOrders data={data.orders} />
           </section>
           <section aria-labelledby="actividad" className="flex min-w-0 flex-col gap-3">
-            <h2 id="actividad" className="text-base font-semibold">
+            <h2 id="actividad" className="text-lg font-semibold tracking-tight">
               Actividad reciente
             </h2>
             <RecentActivityList items={data.activity} />
@@ -167,7 +167,7 @@ export default async function DashboardPage() {
         </div>
 
         <section aria-labelledby="modulos" className="flex flex-col gap-4">
-          <h2 id="modulos" className="text-base font-semibold">
+          <h2 id="modulos" className="text-lg font-semibold tracking-tight">
             Módulos
           </h2>
           <div className="grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -175,7 +175,7 @@ export default async function DashboardPage() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex min-h-24 min-w-0 flex-col justify-between gap-2 rounded-lg border border-line bg-surface p-4 hover:bg-sunken"
+                className="flex min-h-24 min-w-0 flex-col justify-between gap-2 rounded-lg border border-line bg-surface p-4 shadow-card hover:border-line-strong hover:bg-sunken"
               >
                 <div className="flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <span className="text-base font-semibold text-accent">

@@ -20,10 +20,13 @@ describe('página inicial (@/app/page)', () => {
     expect(screen.getByRole('heading', { level: 1, name: /nexovantis/i })).toBeInTheDocument();
   });
 
-  it('no presenta botones ni enlaces ficticios', () => {
+  it('ofrece un único enlace visible para iniciar sesión y ningún botón ficticio', () => {
     render(<Page />);
 
     expect(screen.queryAllByRole('button')).toHaveLength(0);
-    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    const loginLink = screen.getByRole('link', { name: 'Iniciar sesión' });
+    expect(loginLink).toBeVisible();
+    expect(loginLink).toHaveAttribute('href', '/login');
   });
 });
