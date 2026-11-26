@@ -1,4 +1,41 @@
-# Seed demo (clientes y técnicos)
+# Datos de demostración
+
+## Preparación local
+
+El stack de CI deshabilita Studio. Para preparar la demo con el panel local, habilítalo en una copia temporal de la configuración. Desde la raíz del repositorio, con Docker iniciado y los puertos 54321–54323 libres, ejecuta en PowerShell:
+
+```powershell
+$demoWorkspace = Join-Path ([IO.Path]::GetTempPath()) ("nexovantis-demo-" + [guid]::NewGuid())
+$demoSupabaseDir = Join-Path $demoWorkspace 'supabase'
+New-Item -ItemType Directory -Force -Path $demoSupabaseDir | Out-Null
+Copy-Item -LiteralPath 'supabase/migrations' -Destination $demoSupabaseDir -Recurse
+$demoConfig = (Get-Content -Raw 'supabase/config.toml').
+  Replace('project_id = "nexovantis"', 'project_id = "nexovantis-demo"')
+$demoConfig = $demoConfig -replace '(?m)(\[studio\]\r?\n)enabled = false', '${1}enabled = true'
+Set-Content -LiteralPath (Join-Path $demoSupabaseDir 'config.toml') -Value $demoConfig
+supabase start --workdir $demoWorkspace
+```
+
+El arranque aplica las migraciones. Abre Studio en `http://127.0.0.1:54323`. En **Authentication → Users**, crea dos usuarios ficticios confirmados y guarda sus contraseñas localmente. Copia sus UUID y ejecuta este SQL en el **SQL Editor** del proyecto local vacío, sustituyendo ambos marcadores. [Configuración de Studio](https://supabase.com/docs/guides/local-development/cli/config).
+
+```sql
+with demo_orgs as (
+  insert into public.organizations (name)
+  values ('Demo Norte'), ('Demo Sur')
+  returning id, name
+)
+insert into public.memberships (organization_id, user_id, role)
+select id, demo_users.user_id, 'owner'
+from demo_orgs
+join (values
+  ('Demo Norte', '<uuid-usuario-norte>'::uuid),
+  ('Demo Sur', '<uuid-usuario-sur>'::uuid)
+) as demo_users (name, user_id) using (name);
+```
+
+Ejecuta los archivos de `supabase/seeds/` en este orden desde el SQL Editor local: `demo-crm.sql`, `demo-orders.sql`, `demo-quotes.sql` y `demo-inventory.sql`. Usa los valores públicos del stack local para configurar la app. Al terminar, puedes detenerlo con `supabase stop --workdir $demoWorkspace`.
+
+## Scripts y datos de clientes y técnicos
 
 Scripts (no son migraciones y no se ejecutan con `supabase db reset`; `[db.seed]` está desactivado en `supabase/config.toml`):
 
@@ -96,7 +133,7 @@ No hay borrado: la aplicación no borra datos (BR02) y `activity_events` es inmu
 
 ## Órdenes demo (TASK-011, F4)
 
-`supabase/seeds/demo-orders.sql` crea órdenes de servicio **ficticias** (descripciones con el prefijo `[DEMO]`) para `Demo Norte` y `Demo Sur`. **No se ha ejecutado en Cloud** ni en ningún entorno persistente: solo está verificado en PGlite (`tests/integration/seed-orders.test.ts`). Ejecutarlo en Cloud requiere decisión humana expresa.
+`supabase/seeds/demo-orders.sql` crea órdenes de servicio **ficticias** (descripciones con el prefijo `[DEMO]`) para `Demo Norte` y `Demo Sur`. Verificado en PGlite (`tests/integration/seed-orders.test.ts`) y ejecutado en Cloud con autorización humana (22 órdenes y segunda ejecución idempotente). [TASK-011](reviews/claude/TASK-011.md).
 
 - **Requisitos**: migración `20261126090000_task011_work_orders` aplicada y `demo-crm.sql` ejecutado antes (las órdenes enlazan clientes y técnicos demo por su identidad estable). Las mismas precondiciones de organización y `owner` único que `demo-crm.sql`; si no se cumplen, aborta sin cambiar nada.
 - **Qué crea**: Demo Norte 15 órdenes (5 pendientes, 3 asignadas, 2 en curso, 4 completadas, 1 cancelada con motivo) y Demo Sur 7 (2 / 1 / 1 / 2 / 1), con fechas programadas relativas al día de la primera ejecución. Solo usa clientes y técnicos demo **activos**; un fixture cuyo cliente o técnico no existe, está archivado o no tiene identidad se omite con un `RAISE NOTICE`.
@@ -115,7 +152,7 @@ group by o.name, w.status order by o.name, w.status;
 
 ## Presupuestos demo (TASK-012, F5)
 
-`supabase/seeds/demo-quotes.sql` crea presupuestos **ficticios** (descripciones con el prefijo `[DEMO]`, importes en céntimos enteros) para `Demo Norte` y `Demo Sur`. **No se ha ejecutado en Cloud** ni en ningún entorno persistente: solo está verificado en PGlite (`tests/integration/quotes-seed.test.ts`). Ejecutarlo en Cloud requiere decisión humana expresa.
+`supabase/seeds/demo-quotes.sql` crea presupuestos **ficticios** (descripciones con el prefijo `[DEMO]`, importes en céntimos enteros) para `Demo Norte` y `Demo Sur`. Verificado en PGlite (`tests/integration/quotes-seed.test.ts`) y ejecutado en Cloud con autorización humana (11 presupuestos, 4 órdenes generadas y segunda ejecución idempotente). [TASK-012](reviews/claude/TASK-012.md).
 
 - **Requisitos**: migración `20261127090000_task012_quotes` aplicada y `demo-crm.sql` ejecutado antes (los presupuestos enlazan clientes demo por su identidad estable). No depende de `demo-orders.sql` (puede ejecutarse antes o después). Mismas precondiciones de organización y `owner` único que `demo-crm.sql`; si no se cumplen, aborta sin cambiar nada.
 - **Qué crea**: Demo Norte 8 presupuestos (3 borrador, 3 aceptados, 2 rechazados) y Demo Sur 3 (1 / 1 / 1), con 2 a 3 conceptos cada uno y tipos de IVA 21 %, 10 % y 0 %. Cada presupuesto aceptado lleva **su orden de servicio** (pendiente, mismo cliente y título), creada por la misma RPC de aceptación que usa la aplicación; los borradores y rechazados no tienen orden. Numeración `PRE-0001…` por organización.

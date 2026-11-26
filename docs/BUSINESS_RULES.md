@@ -31,8 +31,9 @@ Restricciones:
 - Estados terminales: ninguna transición posterior.
 - Cada cambio de estado y su evento se guardan en la misma transacción (BR03, BR08). "Misma transacción" es una interpretación de "de forma consistente" (BR03), pendiente de confirmación humana; hasta entonces se mantiene como lectura estricta y no se relaja.
 
-## Decisiones pendientes de decisión humana
-Estado: pendiente de decisión humana. Hasta que se resuelvan, Develop no implementa una semántica propia y los casos afectados no son ejecutables (véase "Casos complementarios" en docs/TESTING_GUIDELINES.md). La columna de propuesta es una propuesta técnica de Develop, no aprobada.
+## Decisiones de negocio ratificadas
+
+La tabla conserva las propuestas iniciales. Las ratificaciones y sus fechas figuran a continuación.
 
 | ID | Pregunta | Lectura estricta por defecto | Propuesta de Develop (no aprobada) | Fase de resolución |
 |---|---|---|---|---|
