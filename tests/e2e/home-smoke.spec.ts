@@ -1,11 +1,29 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Página inicial (humo)', () => {
-  test('muestra la descripción del producto y el estado de fundación técnica', async ({ page }) => {
+  test('muestra la descripción y las funcionalidades, sin textos provisionales', async ({
+    page,
+  }) => {
     await page.goto('/');
 
-    await expect(page.getByRole('main')).toContainText('servicios técnicos');
-    await expect(page.getByText('fundación técnica')).toBeVisible();
+    const main = page.getByRole('main');
+    await expect(main).toContainText('servicios técnicos');
+
+    const features = main.getByRole('list', { name: 'Funcionalidades' }).getByRole('listitem');
+    await expect(features).toHaveText([
+      /^Clientes y técnicos:/,
+      /^Órdenes de servicio:/,
+      /^Presupuestos /,
+      /^Inventario:/,
+      /^Panel .*registro de actividad/,
+    ]);
+    for (const feature of await features.all()) {
+      await expect(feature).toBeVisible();
+    }
+
+    await expect(main).not.toContainText(
+      /fundación|estado:|provisional|próximamente|en construcción/i,
+    );
     await expect(page.getByRole('button')).toHaveCount(0);
     await expect(page.getByRole('link')).toHaveCount(0);
   });

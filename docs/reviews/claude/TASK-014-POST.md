@@ -239,3 +239,41 @@ Resueltos: H-02 a H-07, H-13 a H-15 y H-17 a H-20. Si el humano aceptara H-01, l
 
 ### Git
 Testing solo amplió este informe; temporales en `testing-post/retest3` del scratchpad; `test-results/` (ignorado) actualizado por Playwright. 37 archivos versionados modificados y 15 sin versionar; fuera de las listas de Develop solo mi informe, `search-isolation.spec.ts` (independiente, de Testing) y `TASK-014.md` (de Orchestrator, hash `ee4ebad4…` sin cambios). Sin add/commit/stash/checkout; puertos 3100/3391/3392 libres.
+
+## RETEST-4
+
+- 2026-11-26. HEAD `545e79d`, rama `feat/final-polish`, cambios sin commit. Alcance: solo la portada `/` (HD-3). Modelo autoinformado `claude-sonnet-5-5`; esfuerzo efectivo no verificable. Sin Cloud ni lectura de `.env*`.
+- Portada: **PASS** (H-09 resuelto). TASK-014 global: **BLOCKED** (C7 pendiente de CI). Sin hallazgos nuevos.
+
+| Comando (solo dirigidos) | Exit | Resultado |
+|---|---|---|
+| `vitest run tests/unit/app-shell.test.tsx tests/unit/independent/home-page.test.tsx` | 0 | 4/4 |
+| `playwright test tests/e2e/home-smoke.spec.ts tests/e2e/independent/home.spec.ts` (build y servidor propios, valores ficticios) | 0 | 9/9 |
+| `prettier --check` y `eslint --max-warnings=0` sobre los tres archivos | 0 / 0 | verde |
+| `pnpm typecheck` | 0 | verde |
+| `git diff --check HEAD` | 0 | limpio (antes de ampliar este informe) |
+| Script propio de medición en Chromium (`next start`) | 0 | ver abajo |
+
+- Texto: sin texto provisional en el cuerpo visible ni en `title`/`description` servidos (heredados de `layout.tsx`, sin cambios).
+- Afirmaciones contrastadas con el código, por lectura (sin ejecutar contra base): alta, edición y archivado de clientes y técnicos; prioridad, fecha, técnico y estado de órdenes; conceptos, IVA y creación de la orden al aceptar (trigger `quotes_accept_create_order`); entradas, salidas, consumos y stock bajo; indicadores del panel y actividad. Ninguna inventada ni exagerada.
+- Diseño: único cambio, un párrafo sustituido por una lista con tokens existentes. Un `h1`, 0 enlaces, botones u otros controles, 5 elementos; capturas a 375 y 1440 revisadas.
+- 320, 375, 768, 1024, 1440 y 1920: 0 desborde, 0 elementos fuera o recortados, 0 peticiones externas del navegador. Texto al 200 % a 320 y 1024: 0 desborde.
+- axe 4.14.1 (reglas por defecto), 6 anchos: 0 violaciones (moderadas incluidas), 0 incompletas. No acredita conformidad WCAG; las 59 moderadas de RETEST-3 en otras rutas no se re-ejecutaron.
+- Contraste sobre el fondo real `rgb(246,247,249)`: lista y marcadores (14 px) y descripción 6.94:1; `h1` 16.31:1.
+- Pruebas: no debilitadas. Las dos modificadas sustituyen la aserción del texto provisional por descripción, cinco elementos ordenados y ausencia de texto provisional; conservan 0 enlaces/botones en E2E. Fijan solo el inicio de cada elemento (Informational). Sin `skip/only/todo/fixme`; sin cambios en independientes ni acceptance.
+
+### C4 con el texto modificado (HD-1)
+**PASS**, por evidencia ya registrada y **no re-ejecutada**: el POST superó en navegador a 320/375/767/768/1280 teclado, ARIA, contador, GET con panel cerrado, limpiar y rango inválido visible; el único incumplimiento hasta RETEST-3 era H-01 (sin JavaScript), requisito retirado. H-01 sigue abierto como limitación conocida y H-08 aceptado (HD-2). El FAIL anterior se conserva: se emitió con el criterio original.
+
+### Veredicto global
+| Criterios | Estado |
+|---|---|
+| C1, C2, C3, C5, C6, C8, C9, C10, C11 | PASS (evidencia de RETEST-3; en `/`, comprobado ahora) |
+| C4 | PASS (HD-1) |
+| C12 | PASS: tres rutas permitidas y checks dirigidos; `format:check`, `lint` global y suites no repetidos (HD-6) |
+| C7 | **BLOCKED**: falta CI sobre el SHA objetivo |
+
+**TASK-014: BLOCKED**, no es PASS. La CI debe ejecutarse sobre el commit que incluya estos cambios, con la regresión completa.
+
+### Git
+Rutas modificadas antes de este informe: las tres permitidas y `TASK-014.md` (Orchestrator, hash sin cambios durante la verificación). Nada en staging. Testing solo añadió esta sección; temporales en el subdirectorio `testing-home` del scratchpad. Puertos 3100/3393 libres. `.next` (ignorado) queda compilado con valores ficticios: ejecutar `pnpm build` antes de `pnpm start`.
