@@ -17,7 +17,7 @@ export function SegmentedLinks({
           href={item.href}
           aria-current={item.current ? 'true' : undefined}
           className={cn(
-            'inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium',
+            'inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium whitespace-nowrap',
             item.current
               ? 'border-accent bg-accent text-white'
               : 'border-line-strong bg-surface text-ink hover:bg-sunken',

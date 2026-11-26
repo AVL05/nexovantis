@@ -29,6 +29,7 @@ export function RecordList({
     if (filtered) {
       return (
         <EmptyState
+          headingLevel="h2"
           title={`No hay ${module.plural} que coincidan`}
           action={
             <LinkButton href={buildListHref(module.basePath, {})} variant="secondary">
@@ -42,6 +43,7 @@ export function RecordList({
     }
     return (
       <EmptyState
+        headingLevel="h2"
         title={`Todavía no hay ${module.plural} activos`}
         action={
           <LinkButton href={`${module.basePath}/new`}>Crear el primer {module.singular}</LinkButton>
@@ -97,7 +99,7 @@ export function RecordList({
             className="flex flex-col gap-1 rounded-lg border border-line bg-surface p-4"
           >
             <div className="flex items-start justify-between gap-3">
-              <Link href={href(item.id)} className={`${NAME_LINK} break-words`}>
+              <Link href={href(item.id)} className={`${NAME_LINK} [overflow-wrap:anywhere]`}>
                 {item.name}
               </Link>
               <StatusBadge archived={item.archivedAt !== null} />

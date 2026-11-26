@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from './cn';
 import { Spinner } from './Spinner';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-outline';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANT: Record<ButtonVariant, string> = {
@@ -11,9 +11,12 @@ const VARIANT: Record<ButtonVariant, string> = {
   secondary: 'border border-line-strong bg-surface text-ink hover:bg-sunken active:bg-line',
   ghost: 'text-ink hover:bg-sunken active:bg-line',
   danger: 'bg-danger text-white hover:bg-danger-hover active:bg-danger-hover',
+  'danger-outline':
+    'border border-danger bg-surface text-danger hover:bg-danger-soft active:bg-danger-soft',
 };
 const SIZE: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-sm',
+  // Compacto solo desde `md`: en móvil conserva un objetivo táctil de 40 px.
+  sm: 'h-10 px-3 text-sm md:h-8',
   md: 'h-10 px-4 text-sm',
   lg: 'h-12 px-5 text-base',
 };

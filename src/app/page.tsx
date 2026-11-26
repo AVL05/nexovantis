@@ -9,7 +9,16 @@ export default function Home() {
         Gestión de operaciones y servicios técnicos para pequeñas empresas de mantenimiento,
         instalaciones y reparaciones.
       </p>
-      <p className="text-sm text-ink-subtle">Estado: fundación técnica.</p>
+      <ul
+        aria-label="Funcionalidades"
+        className="flex max-w-prose list-disc flex-col gap-1.5 pl-5 text-sm text-ink-muted"
+      >
+        <li>Clientes y técnicos: alta, edición y archivado de sus fichas.</li>
+        <li>Órdenes de servicio: prioridad, fecha programada, técnico asignado y estado.</li>
+        <li>Presupuestos con conceptos e IVA; al aceptarlos se genera la orden de servicio.</li>
+        <li>Inventario: entradas, salidas, consumos en órdenes y control de stock bajo.</li>
+        <li>Panel con indicadores de órdenes y registro de actividad.</li>
+      </ul>
     </main>
   );
 }

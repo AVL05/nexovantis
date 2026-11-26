@@ -85,11 +85,12 @@ Solo transiciones funcionales de 150-200 ms (`ease-out`): color de hover y desli
 
 ## 4. Guía de componentes
 
-- **Button:** una sola `primary` por zona; `secondary` para acciones alternas (p. ej. Cerrar sesión); `ghost` en barras; `danger` solo para acciones destructivas con confirmación (`Dialog`). Usa `loading` en envíos.
+- **Button:** una sola `primary` por zona; `secondary` para acciones alternas (p. ej. Cerrar sesión); `ghost` en barras; `danger` solo para acciones destructivas con confirmación (`Dialog`); `danger-outline` para el disparador discreto de una destructiva (archivar: ancho ajustado, el rojo sólido queda en la confirmación). `sm` mide 40 px en móvil y 32 px desde 768 px. Usa `loading` en envíos.
 - **Field:** siempre con etiqueta visible; ayuda con `hint`, errores con `error` (activa `aria-invalid` y `aria-describedby`). No uses placeholder como etiqueta.
 - **Badge:** estado corto de un registro (p. ej. de una orden); siempre texto.
 - **Table:** `caption` obligatorio, `Th scope="col"`; envolver no es necesario, ya incluye scroll.
-- **Dialog:** confirmaciones y formularios breves; título obligatorio; Escape y foco gestionados por `<dialog>`.
+- **Dialog:** confirmaciones y formularios breves; título obligatorio; Escape y foco gestionados por `<dialog>`. Si el envío falla, el diálogo de cancelar una orden sigue abierto, muestra el error dentro (`role=alert`, con foco) y conserva lo escrito; si se cerró durante el envío, el error aparece en la página. "Quitar concepto" usa la misma confirmación con error dentro. Destino del foco: cancelar o completar una orden, aviso "Orden cerrada"; asignar, reasignar o iniciar, título "Acciones" (o el mensaje de error); quitar un concepto, título "Conceptos"; aceptar o rechazar un presupuesto, contenido principal (o el mensaje de error). Registrar movimiento y añadir concepto, si el envío dejó el foco sin control: título de su bloque o mensaje de error. Guardar una orden, un presupuesto, un artículo, un cliente o un técnico, y editar un concepto: si falla y el foco se perdió, mensaje de error (en el diálogo, dentro de él; si se cerró durante el envío, junto a "Editar", y reabrir lo limpia). Acceso con credenciales rechazadas y foco perdido: mensaje de error. En las acciones de una orden solo se muestra el resultado de la última. El diálogo de archivar y restaurar delega el foco en `<dialog>`.
+- **CollapsibleFilters:** rejilla de los filtros de órdenes, presupuestos y actividad. Por debajo de 768 px la búsqueda y "Filtrar" quedan a la vista y el resto se pliega tras "Filtros (n activos)" (`aria-expanded`/`aria-controls`); los campos plegados se envían igual, un error de rango lo abre y sin JavaScript (`scripting: none`) no se pliega nada.
 - **EmptyState / Alert / ErrorState:** vacío = qué llegará; alerta = mensaje contextual; error = qué pasó y cómo reintentar. `danger` anuncia con `role="alert"`.
 - **LiveRegion:** aviso breve anunciado a lectores de pantalla; sin cola ni temporizadores.
 - **PageHeader / LinkButton:** un único `h1` por página con descripción y acciones; `LinkButton` es un enlace con el aspecto de `Button` (misma altura táctil de 40 px), para navegación (alta, cancelar).
@@ -111,3 +112,13 @@ Revisión estática y comprobaciones automáticas del repositorio (tipos, lint, 
 - Cabecera móvil: botón de menú icónico (40 px, nombre accesible "Menú"), monograma, y a la derecha organización/rol truncados más "Cerrar sesión".
 - Contenedor de `main`: ancho máximo 1400 px; formularios ≤ 42rem; detalle en 3 columnas desde 1280 px.
 - Login: panel de marca con retícula de plano técnico (SVG inline decorativo), cabecera de marca en móvil y control "Mostrar/Ocultar" de contraseña (texto visible, sin la palabra "contraseña" para no duplicar el label del campo).
+
+## Ajustes TASK-014 (pulido final)
+
+- Panel: cabecera con los accesos rápidos (en la misma línea que el título cuando caben; si no, debajo); indicadores con abiertas, vencidas y total destacados y debajo el desglose compacto por estado; pendientes y actividad (con inventario y enlace a `/activity`); módulos con su cifra y una flecha decorativa, sin badge "Abrir".
+- Tablas en columnas estrechas: los conceptos de presupuesto y el historial de movimientos responden al ancho de su contenedor (container queries), no del viewport. Conceptos: un bloque por línea con cifras en rejilla (2, 3 o 5 columnas), conservando la semántica de tabla con `role` explícitos. Movimientos: tabla de cuatro columnas desde 42 rem y tarjetas por debajo. Sustituye en estos dos casos al scroll horizontal propio del principio 3.
+- Los estados vacíos de los listados, situados bajo el `h1`, usan `h2`.
+- Enlaces dentro de una frase: subrayados siempre (no se distinguen solo por el color).
+- Textos largos sin espacios: `main` usa `overflow-wrap: anywhere`; las cabeceras de tabla solo se parten entre palabras y lo demás que no deba partirse declara `whitespace-nowrap` o `truncate`.
+- Los formularios con selectores (órdenes, presupuestos, artículos, conceptos, movimientos y asignar técnico) envían con `submitKeepingValues`: si el envío falla se conserva lo elegido (el reseteo automático de React 19 devolvía los `<select>` a su valor inicial). En éxito redirigen, cierran el diálogo o se limpian como antes.
+- Envío sin JavaScript (POST progresivo): alta y edición de órdenes, presupuestos, artículos, clientes y técnicos, y asignar, reasignar, iniciar y completar una orden. Requieren JavaScript: registrar movimiento, añadir, editar y quitar concepto (quitar, desde que pide confirmación), cancelar una orden, aceptar o rechazar un presupuesto y archivar o restaurar. Pendiente: en las rutas con `loading.tsx` el contenido no llega a mostrarse sin JavaScript.

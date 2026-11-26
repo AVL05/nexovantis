@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { metadata } from '@/app/layout';
 import Home from '@/app/page';
+
+const PROVISIONAL = /fundación|estado:|provisional|próximamente|en construcción/i;
 
 describe('layout (metadata)', () => {
   it('define el título "Nexovantis" y una descripción no vacía', () => {
@@ -13,11 +15,26 @@ describe('layout (metadata)', () => {
 });
 
 describe('página inicial', () => {
-  it('describe el producto y declara el estado de fundación técnica', () => {
+  it('describe el producto y sus funcionalidades, sin textos provisionales', () => {
     render(<Home />);
 
-    expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByText(/servicios técnicos/i)).toBeInTheDocument();
-    expect(screen.getByText(/fundación técnica/i)).toBeInTheDocument();
+    const main = screen.getByRole('main');
+    expect(screen.getByText(/servicios técnicos para pequeñas empresas/i)).toBeInTheDocument();
+
+    const list = screen.getByRole('list', { name: 'Funcionalidades' });
+    expect(main).toContainElement(list);
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      expect.stringMatching(/^Clientes y técnicos:/),
+      expect.stringMatching(/^Órdenes de servicio:/),
+      expect.stringMatching(/^Presupuestos /),
+      expect.stringMatching(/^Inventario:/),
+      expect.stringMatching(/^Panel .*registro de actividad/),
+    ]);
+
+    expect(main).not.toHaveTextContent(PROVISIONAL);
   });
 });

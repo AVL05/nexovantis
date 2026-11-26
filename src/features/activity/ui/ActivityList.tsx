@@ -26,6 +26,8 @@ const ENTITY_TONE: Record<ActivityEntity, BadgeTone> = {
 };
 
 const LINK = 'font-medium text-accent [overflow-wrap:anywhere] hover:underline';
+// Enlace dentro de una frase: subrayado siempre, para no distinguirse solo por el color.
+const INLINE_LINK = 'font-medium text-accent underline underline-offset-2 [overflow-wrap:anywhere]';
 
 const SIGN: Partial<Record<ActivityAction, string>> = {
   stock_in: '+',
@@ -48,7 +50,7 @@ function Detail({
       {detail.orderId ? (
         <>
           {' · '}
-          <Link href={`/orders/${detail.orderId}`} className={LINK}>
+          <Link href={`/orders/${detail.orderId}`} className={INLINE_LINK}>
             {detail.orderTitle ?? 'Orden de servicio'}
           </Link>
         </>
@@ -84,6 +86,7 @@ export function ActivityList({
     if (hasActiveFilters(params)) {
       return (
         <EmptyState
+          headingLevel="h2"
           title="No hay actividad que coincida"
           action={
             <LinkButton href="/activity" variant="secondary">
@@ -96,7 +99,7 @@ export function ActivityList({
       );
     }
     return (
-      <EmptyState title="Todavía no hay actividad">
+      <EmptyState headingLevel="h2" title="Todavía no hay actividad">
         Aquí aparecerán los cambios de clientes, técnicos, órdenes, presupuestos e inventario, con
         quién los hizo y cuándo.
       </EmptyState>

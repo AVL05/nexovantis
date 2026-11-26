@@ -61,8 +61,12 @@ describe('fronteras de servidor de las ordenes', () => {
 
   it('las lecturas se acotan a la organizacion de la membresia (RLS es la frontera real)', () => {
     const service = read(`${FEATURE}/service.ts`);
-    const scoped = service.match(/'organization_id',\s*ctx\.organizationId/g) ?? [];
+    // TASK-014: la busqueda por cliente ya no es una consulta aparte sino un recurso embebido, que
+    // conserva su propio filtro de organizacion (cuenta como lectura acotada; el umbral no cambia).
+    const scoped =
+      service.match(/'(?:search_customer\.)?organization_id',\s*ctx\.organizationId/g) ?? [];
     expect(scoped.length).toBeGreaterThanOrEqual(8);
+    expect(service).toContain("eq('search_customer.organization_id', ctx.organizationId)");
     expect(service).not.toMatch(/organizationId:\s*(input|formData|params)/);
   });
 });

@@ -55,6 +55,18 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Textos del usuario sin espacios (hasta 200 caracteres): se parten antes que desbordar la página.
+   `anywhere` reduce además el ancho mínimo de los elementos flex y grid. Lo que no debe partirse
+   declara `whitespace-nowrap` o `truncate`. */
+main {
+  overflow-wrap: anywhere;
+}
+
+/* Las cabeceras solo se parten entre palabras: la columna nunca queda más estrecha que una. */
+main th {
+  overflow-wrap: normal;
+}
+
 body {
   background: var(--color-canvas);
   color: var(--color-ink);

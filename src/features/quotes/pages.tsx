@@ -102,7 +102,7 @@ function Item({ term, children }: Readonly<{ term: string; children: ReactNode }
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-xs font-semibold tracking-wide text-ink-muted uppercase">{term}</dt>
-      <dd className="text-sm break-words text-ink">{children}</dd>
+      <dd className="text-sm [overflow-wrap:anywhere] text-ink">{children}</dd>
     </div>
   );
 }
@@ -112,7 +112,7 @@ function QuoteDetails({ quote }: Readonly<{ quote: QuoteView }>) {
     <dl className="grid gap-4 rounded-lg border border-line bg-surface p-5 sm:grid-cols-2">
       <Item term="Cliente">
         <Link
-          className="font-medium text-accent hover:underline"
+          className="font-medium text-accent underline underline-offset-2"
           href={`/customers/${quote.customerId}`}
         >
           {quote.customerName}
@@ -136,7 +136,7 @@ function QuoteDetails({ quote }: Readonly<{ quote: QuoteView }>) {
         <dt className="text-xs font-semibold tracking-wide text-ink-muted uppercase">
           Descripción
         </dt>
-        <dd className="text-sm break-words whitespace-pre-wrap text-ink">
+        <dd className="text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">
           {quote.description ?? 'Sin descripción'}
         </dd>
       </div>
@@ -188,7 +188,7 @@ export async function QuoteDetailPage({
         <Alert tone="success" title="Presupuesto aceptado">
           Se generó una orden de servicio a partir de este presupuesto.{' '}
           <Link
-            className="font-medium text-accent hover:underline"
+            className="font-medium text-accent underline underline-offset-2"
             href={`/orders/${quote.orderId}`}
           >
             Ver la orden de servicio

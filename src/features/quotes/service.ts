@@ -13,7 +13,7 @@ import {
   type ServiceResult,
 } from '@/lib/records/errors';
 import { pageCountFor } from '@/lib/records/params';
-import { buildSearchFilter } from '@/lib/records/search';
+import { buildSearchFilter, escapeLikePattern } from '@/lib/records/search';
 import type { TenantContext } from '@/lib/records/tenant';
 
 import {
@@ -49,13 +49,13 @@ interface Chain extends PromiseLike<QueryResult> {
   in(column: string, values: readonly string[]): Chain;
   is(column: string, value: null): Chain;
   or(filters: string): Chain;
+  ilike(column: string, pattern: string): Chain;
   order(column: string, options: { ascending: boolean; nullsFirst?: boolean }): Chain;
   range(from: number, to: number): Chain;
   limit(count: number): Chain;
 }
 
 const uuid = z.uuid();
-const MAX_SEARCH_CUSTOMERS = 100;
 const OPTIONS_LIMIT = 500;
 const HISTORY_LIMIT = 50;
 
@@ -209,53 +209,52 @@ async function hydrate(ctx: TenantContext, rows: Row[]): Promise<ServiceResult<Q
   return ok(rows.map((row) => toView(row, customers.data)));
 }
 
-/** Filtros de listado; el texto va siempre por buildSearchFilter (sin inyección en `.or()`). */
-function applyFilters(
-  query: unknown,
-  ctx: TenantContext,
-  params: QuoteListParams,
-  customerIds: string[],
-) {
+/**
+ * Patrón ILIKE (texto literal) para buscar por nombre de cliente sobre el recurso embebido. Es un
+ * filtro simple (no lógico): PostgREST toma el valor tal cual, sin comillas.
+ */
+function customerNamePattern(q: string): string {
+  return `%${escapeLikePattern(q.replace(/[\u0000-\u001f\u007f]/g, ' ').trim())}%`;
+}
+
+/**
+ * Embed vacío (no añade columnas a la respuesta) de la única FK hacia `customers`. Filtrado por
+ * nombre, `search_customer.not.is.null` dentro del `or` equivale a "su cliente coincide": la
+ * búsqueda se resuelve en la propia consulta, bajo RLS y sin límite de clientes coincidentes.
+ */
+const CUSTOMER_EMBED = 'search_customer:customers()';
+
+/** Texto de búsqueda sobre las columnas propias (escapado); null si el término está vacío. */
+const textFilter = (q: string) => buildSearchFilter(q, ['title', 'description']);
+
+/** El embed solo se pide cuando hay término de búsqueda. */
+const listColumns = (columns: string, q: string) =>
+  textFilter(q) ? `${columns},${CUSTOMER_EMBED}` : columns;
+
+/** Filtros de listado; el texto va siempre escapado (sin inyección en `.or()`). */
+function applyFilters(query: unknown, ctx: TenantContext, params: QuoteListParams) {
   let result = (query as Chain).eq('organization_id', ctx.organizationId);
   if (params.status) result = result.eq('status', params.status);
   if (params.customer) result = result.eq('customer_id', params.customer);
-  const text = buildSearchFilter(params.q, ['title', 'description']);
+  const text = textFilter(params.q);
   if (text) {
-    const byCustomer = customerIds.length > 0 ? `,customer_id.in.(${customerIds.join(',')})` : '';
     const number = quoteNumberFromQuery(params.q);
     const byNumber = number === null ? '' : `,number.eq.${number}`;
-    result = result.or(`${text}${byCustomer}${byNumber}`);
+    result = result
+      .eq('search_customer.organization_id', ctx.organizationId)
+      .ilike('search_customer.name', customerNamePattern(params.q))
+      .or(`${text},search_customer.not.is.null${byNumber}`);
   }
   return result;
-}
-
-async function matchingCustomerIds(
-  ctx: TenantContext,
-  q: string,
-): Promise<ServiceResult<string[]>> {
-  const filter = buildSearchFilter(q, ['name']);
-  if (!filter) return ok([]);
-  const { data, error } = await (db(ctx).from('customers').select('id') as unknown as Chain)
-    .eq('organization_id', ctx.organizationId)
-    .or(filter)
-    .limit(MAX_SEARCH_CUSTOMERS);
-  if (error) return failure(error);
-  return ok(
-    ((data ?? []) as Row[]).map((row) => String(row.id)).filter((id) => uuid.safeParse(id).success),
-  );
 }
 
 export const quoteService = {
   /** Listado paginado (20 por página) con búsqueda y filtros. La página se acota al rango válido. */
   async list(ctx: TenantContext, params: QuoteListParams): Promise<ServiceResult<QuoteListResult>> {
-    const customerIds = await matchingCustomerIds(ctx, params.q);
-    if (!customerIds.ok) return customerIds;
-
     const counted = await applyFilters(
-      db(ctx).from('quotes').select('id', { count: 'exact', head: true }),
+      db(ctx).from('quotes').select(listColumns('id', params.q), { count: 'exact', head: true }),
       ctx,
       params,
-      customerIds.data,
     );
     if (counted.error) return failure(counted.error);
     const total = counted.count ?? 0;
@@ -265,10 +264,9 @@ export const quoteService = {
 
     const from = (page - 1) * PAGE_SIZE;
     const { data, error } = await applyFilters(
-      db(ctx).from('quotes').select('*'),
+      db(ctx).from('quotes').select(listColumns('*', params.q)),
       ctx,
       params,
-      customerIds.data,
     )
       .order('number', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);

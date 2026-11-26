@@ -45,7 +45,7 @@ export function SearchBar({
         {defaultValue && clearHref ? (
           <Link
             href={clearHref}
-            className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium text-accent hover:underline"
+            className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap text-accent hover:underline"
           >
             Limpiar
           </Link>

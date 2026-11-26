@@ -8,6 +8,7 @@ import { Alert } from '../Alert';
 import { Button } from '../Button';
 import { LinkButton } from '../LinkButton';
 import { Field, FieldError, Label, inputClass } from '../Field';
+import { useFocusOnError } from '../forms';
 
 /**
  * Formulario de alta/edición. Validación de cliente con atributos HTML (required, maxLength,
@@ -32,15 +33,18 @@ export function RecordForm({
   const [state, formAction, pending] = useActionState(action, IDLE_FORM);
   const values = state.values ?? initial;
   const errors = state.fieldErrors ?? {};
+  const errorRef = useFocusOnError(state);
   const notesError = errors.notes;
 
   return (
     <form action={formAction} className="flex max-w-2xl flex-col gap-5">
       {recordId ? <input type="hidden" name="id" value={recordId} /> : null}
       {state.status === 'error' && state.message ? (
-        <Alert tone="danger" data-testid="form-error">
-          {state.message}
-        </Alert>
+        <div ref={errorRef} tabIndex={-1}>
+          <Alert tone="danger" data-testid="form-error">
+            {state.message}
+          </Alert>
+        </div>
       ) : null}
       <Field
         label={module.nameLabel}

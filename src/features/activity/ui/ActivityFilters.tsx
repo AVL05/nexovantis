@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
+import { CollapsibleFilters } from '@/components/ui/CollapsibleFilters';
 import { Field } from '@/components/ui/Field';
 import { Select } from '@/components/ui/Select';
 
@@ -12,7 +13,12 @@ import {
   ENTITY_LABEL,
   ENTITY_PARAM,
 } from '../constants';
-import { hasActiveFilters, isInvertedRange, type ActivityListParams } from '../params';
+import {
+  buildActivityHref,
+  hasActiveFilters,
+  isInvertedRange,
+  type ActivityListParams,
+} from '../params';
 
 /**
  * Filtros por GET: sin JavaScript, URL compartible y la página se reinicia al filtrar. El rango de
@@ -20,9 +26,33 @@ import { hasActiveFilters, isInvertedRange, type ActivityListParams } from '../p
  */
 export function ActivityFilters({ params }: Readonly<{ params: ActivityListParams }>) {
   const inverted = isInvertedRange(params);
+  const activeCount = [params.entity, params.action, params.from, params.to].filter(Boolean).length;
   return (
-    <form action="/activity" method="get" role="search" aria-label="Filtrar actividad">
-      <div className="grid gap-4 rounded-lg border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
+    // La clave reinicia los campos no controlados al cambiar los filtros por enlace ("Limpiar").
+    <form
+      key={buildActivityHref('', { ...params, page: 1 })}
+      action="/activity"
+      method="get"
+      role="search"
+      aria-label="Filtrar actividad"
+    >
+      <CollapsibleFilters
+        activeCount={activeCount}
+        forceOpen={inverted}
+        actions={
+          <>
+            <Button type="submit">Filtrar</Button>
+            {hasActiveFilters(params) ? (
+              <Link
+                href="/activity"
+                className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap text-accent hover:underline"
+              >
+                Limpiar filtros
+              </Link>
+            ) : null}
+          </>
+        }
+      >
         <Select
           label="Entidad"
           name="entidad"
@@ -61,18 +91,7 @@ export function ActivityFilters({ params }: Readonly<{ params: ActivityListParam
           defaultValue={params.to ?? ''}
           hint="Incluye el día completo (hora de Madrid)."
         />
-        <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-4">
-          <Button type="submit">Filtrar</Button>
-          {hasActiveFilters(params) ? (
-            <Link
-              href="/activity"
-              className="inline-flex h-10 items-center rounded-md px-3 text-sm font-medium text-accent hover:underline"
-            >
-              Limpiar filtros
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      </CollapsibleFilters>
       {inverted ? (
         <div className="pt-3">
           <Alert tone="warning">

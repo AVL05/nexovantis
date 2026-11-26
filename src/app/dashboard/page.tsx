@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { AppShell } from '@/components/shell/AppShell';
-import { Badge } from '@/components/ui/Badge';
 import { listRecentActivity } from '@/features/activity/service';
 import { LogoutButton } from '@/features/auth/LogoutButton';
 import { requireMembership } from '@/features/auth/session';
@@ -123,17 +122,21 @@ export default async function DashboardPage() {
       actions={<LogoutButton />}
     >
       <div className="flex flex-col gap-8">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
-          <p className="text-sm text-ink-muted">Sesión iniciada como {user.email}</p>
+        {/* Acción primaria a la vista; los accesos comparten línea con el título solo si caben. */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
+            <p className="text-sm [overflow-wrap:anywhere] text-ink-muted">
+              Sesión iniciada como {user.email}
+            </p>
+          </div>
+          <section aria-labelledby="accesos" className="max-w-full min-w-0">
+            <h2 id="accesos" className="sr-only">
+              Accesos rápidos
+            </h2>
+            <QuickActions />
+          </section>
         </div>
-
-        <section aria-labelledby="accesos" className="flex flex-col gap-3">
-          <h2 id="accesos" className="text-base font-semibold">
-            Accesos rápidos
-          </h2>
-          <QuickActions />
-        </section>
 
         <section aria-labelledby="indicadores" className="flex flex-col gap-3">
           <h2 id="indicadores" className="text-base font-semibold">
@@ -154,6 +157,12 @@ export default async function DashboardPage() {
               Actividad reciente
             </h2>
             <RecentActivityList items={data.activity} />
+            <Link
+              href="/activity"
+              className="inline-flex min-h-10 w-fit items-center text-sm font-medium text-accent hover:underline"
+            >
+              Ver toda la actividad
+            </Link>
           </section>
         </div>
 
@@ -161,24 +170,25 @@ export default async function DashboardPage() {
           <h2 id="modulos" className="text-base font-semibold">
             Módulos
           </h2>
-          <div className="grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {modules.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex min-h-24 min-w-0 flex-col gap-1 rounded-lg border border-line bg-surface p-5 hover:bg-sunken"
+                className="flex min-h-24 min-w-0 flex-col justify-between gap-2 rounded-lg border border-line bg-surface p-4 hover:bg-sunken"
               >
-                <div className="flex w-full min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                  <span className="text-base font-semibold text-ink">{item.title}</span>
-                  <Badge tone="info">Abrir</Badge>
+                <div className="flex w-full min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span className="text-base font-semibold text-accent">
+                    {item.title} <span aria-hidden="true">→</span>
+                  </span>
+                  <span
+                    data-testid={item.testId}
+                    className="text-2xl font-semibold tracking-tight text-ink tabular-nums"
+                  >
+                    {item.value ?? 'No disponible'}
+                  </span>
                 </div>
                 <span className="text-sm text-ink-muted">{item.description}</span>
-                <span
-                  data-testid={item.testId}
-                  className="text-2xl font-semibold tracking-tight text-ink"
-                >
-                  {item.value ?? 'No disponible'}
-                </span>
               </Link>
             ))}
           </div>

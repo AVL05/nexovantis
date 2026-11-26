@@ -4,6 +4,7 @@ import { Alert } from '@/components/ui/Alert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { cn } from '@/components/ui/cn';
+import { ENTITY_LABEL, ENTITY_PATH, actionLabel } from '@/features/activity/constants';
 import type { RecentActivity } from '@/features/activity/service';
 import { formatDate, formatDateTime } from '@/lib/records/format';
 
@@ -36,8 +37,8 @@ const STATUS_ORDER: readonly OrderStatus[] = [
   'cancelled',
 ];
 
-const TILE =
-  'flex min-h-24 min-w-0 flex-col justify-between gap-1 rounded-lg border border-line border-l-4 bg-surface p-4';
+const TILE = 'flex min-w-0 justify-between rounded-lg border border-line border-l-4';
+const SUMMARY = cn(TILE, 'flex-col gap-1 p-4');
 
 /** Indicadores de órdenes derivados de las filas persistidas (nunca cifras inventadas). */
 export function OrderIndicators({ data }: Readonly<{ data: DashboardData | null }>) {
@@ -49,7 +50,33 @@ export function OrderIndicators({ data }: Readonly<{ data: DashboardData | null 
     );
   }
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
+      {/* Primero lo que pide atención (abiertas y vencidas); debajo, el desglose por estado. */}
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className={cn(SUMMARY, 'col-span-2 border-l-accent bg-surface sm:col-span-1')}>
+          <dt className="text-sm font-medium text-ink">Órdenes abiertas</dt>
+          <dd data-testid="orders-open" className="text-3xl font-semibold tabular-nums">
+            {data.open}
+          </dd>
+        </div>
+        <div
+          className={cn(
+            SUMMARY,
+            data.overdue > 0 ? 'border-l-danger bg-danger-soft' : 'border-l-line-strong bg-surface',
+          )}
+        >
+          <dt className="text-sm font-medium text-ink">Abiertas con fecha vencida</dt>
+          <dd data-testid="orders-overdue" className="text-3xl font-semibold tabular-nums">
+            {data.overdue}
+          </dd>
+        </div>
+        <div className={cn(SUMMARY, 'border-l-line-strong bg-surface')}>
+          <dt className="text-sm font-medium text-ink">Órdenes en total</dt>
+          <dd data-testid="orders-total" className="text-3xl font-semibold tabular-nums">
+            {data.total}
+          </dd>
+        </div>
+      </dl>
       <ul
         aria-label="Órdenes por estado"
         className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5"
@@ -58,12 +85,16 @@ export function OrderIndicators({ data }: Readonly<{ data: DashboardData | null 
           <li key={status} className="min-w-0">
             <Link
               href={`/orders?estado=${status}`}
-              className={cn(TILE, STATUS_ACCENT[status], 'h-full hover:bg-sunken')}
+              className={cn(
+                TILE,
+                STATUS_ACCENT[status],
+                'h-full min-h-12 flex-wrap items-center gap-x-3 bg-surface px-3 py-2.5 hover:bg-sunken',
+              )}
             >
               <span className="text-sm text-ink-muted">{PLURAL_LABEL[status]}</span>
               <span
                 data-testid={`orders-${status}`}
-                className="text-2xl font-semibold tracking-tight text-ink tabular-nums"
+                className="text-xl font-semibold tracking-tight text-ink tabular-nums"
               >
                 {data.counts[status]}
               </span>
@@ -71,26 +102,6 @@ export function OrderIndicators({ data }: Readonly<{ data: DashboardData | null 
           </li>
         ))}
       </ul>
-      <dl className="grid gap-3 sm:grid-cols-3">
-        <div className={cn(TILE, 'border-l-ink')}>
-          <dt className="text-sm text-ink-muted">Órdenes abiertas</dt>
-          <dd data-testid="orders-open" className="text-2xl font-semibold tabular-nums">
-            {data.open}
-          </dd>
-        </div>
-        <div className={cn(TILE, data.overdue > 0 ? 'border-l-danger' : 'border-l-line-strong')}>
-          <dt className="text-sm text-ink-muted">Abiertas con fecha vencida</dt>
-          <dd data-testid="orders-overdue" className="text-2xl font-semibold tabular-nums">
-            {data.overdue}
-          </dd>
-        </div>
-        <div className={cn(TILE, 'border-l-line-strong')}>
-          <dt className="text-sm text-ink-muted">Órdenes en total</dt>
-          <dd data-testid="orders-total" className="text-2xl font-semibold tabular-nums">
-            {data.total}
-          </dd>
-        </div>
-      </dl>
     </div>
   );
 }
@@ -118,7 +129,7 @@ export function PendingOrders({ data }: Readonly<{ data: DashboardData | null }>
             <div className="flex min-w-0 flex-col">
               <Link
                 href={`/orders/${order.id}`}
-                className="min-h-6 font-medium break-words text-accent hover:underline"
+                className="inline-flex min-h-10 items-center font-medium [overflow-wrap:anywhere] text-accent hover:underline md:min-h-6"
               >
                 {order.title}
               </Link>
@@ -142,7 +153,9 @@ export function PendingOrders({ data }: Readonly<{ data: DashboardData | null }>
   );
 }
 
-const ACTION_LABEL: Record<RecentActivity['action'], string> = {
+// Textos breves del panel para órdenes, clientes y técnicos. El inventario usa las etiquetas por
+// entidad de `actionLabel` ('created' de un artículo no es una orden creada).
+const ACTION_LABEL: Partial<Record<RecentActivity['action'], string>> = {
   created: 'Orden creada',
   assigned: 'Técnico asignado',
   reassigned: 'Técnico reasignado',
@@ -151,9 +164,12 @@ const ACTION_LABEL: Record<RecentActivity['action'], string> = {
   archived: 'Archivado',
   restored: 'Restaurado',
 };
-const ENTITY_PATH = { work_order: '/orders', customer: '/customers', technician: '/technicians' };
-const ENTITY_LABEL = { work_order: 'Orden', customer: 'Cliente', technician: 'Técnico' };
 const ACTOR_LABEL = { self: 'Tú', member: 'Miembro', former: 'Antiguo miembro' } as const;
+
+function recentLabel({ entityType, action }: RecentActivity): string {
+  const short = entityType === 'inventory_item' ? undefined : ACTION_LABEL[action];
+  return short ?? actionLabel(entityType, action);
+}
 
 export function RecentActivityList({
   items,
@@ -162,7 +178,7 @@ export function RecentActivityList({
   if (items.length === 0) {
     return (
       <EmptyState title="Sin actividad todavía">
-        Aquí verás los últimos cambios de órdenes, clientes y técnicos.
+        Aquí verás los últimos cambios de órdenes, clientes, técnicos e inventario.
       </EmptyState>
     );
   }
@@ -171,11 +187,11 @@ export function RecentActivityList({
       {items.map((item) => (
         <li key={item.id} className="flex flex-col gap-0.5 px-4 py-3">
           <span className="text-sm font-medium">
-            {ACTION_LABEL[item.action]}
+            {recentLabel(item)}
             {' · '}
             <Link
               href={`${ENTITY_PATH[item.entityType]}/${item.entityId}`}
-              className="text-accent [overflow-wrap:anywhere] hover:underline"
+              className="text-accent underline underline-offset-2 [overflow-wrap:anywhere]"
             >
               {item.entityLabel ?? ENTITY_LABEL[item.entityType]}
             </Link>

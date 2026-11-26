@@ -60,7 +60,12 @@ export function ArchiveControl({
 
   return (
     <div className="flex flex-col gap-3">
-      <Button variant={archived ? 'secondary' : 'danger'} onClick={() => setOpen(true)}>
+      {/* Disparador discreto y ajustado al texto: el rojo sólido se reserva a la confirmación. */}
+      <Button
+        variant={archived ? 'secondary' : 'danger-outline'}
+        className="self-start"
+        onClick={() => setOpen(true)}
+      >
         {verb} {module.singular}
       </Button>
 

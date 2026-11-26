@@ -27,6 +27,7 @@ export function OrderList({
     if (hasActiveFilters(params)) {
       return (
         <EmptyState
+          headingLevel="h2"
           title="No hay órdenes que coincidan"
           action={
             <LinkButton href="/orders" variant="secondary">
@@ -40,6 +41,7 @@ export function OrderList({
     }
     return (
       <EmptyState
+        headingLevel="h2"
         title="Todavía no hay órdenes de servicio"
         action={<LinkButton href="/orders/new">Crear la primera orden</LinkButton>}
       >
@@ -100,7 +102,10 @@ export function OrderList({
             className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface p-4"
           >
             <div className="flex items-start justify-between gap-3">
-              <Link href={href(item.id)} className={`${TITLE_LINK} min-w-0 break-words`}>
+              <Link
+                href={href(item.id)}
+                className={`${TITLE_LINK} min-w-0 [overflow-wrap:anywhere]`}
+              >
                 {item.title}
               </Link>
               <OrderStatusBadge status={item.status} />
